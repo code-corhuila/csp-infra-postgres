@@ -6,6 +6,7 @@ include:
   - path: ../csp-booking-db/deploy/compose.yml
   - path: ../csp-booking-api/deploy/compose.yml
   - path: ../csp-worker/deploy/compose.yml
+  - path: ../csp-infra-mongo/compose.yml
   # one line per repository the team runs
 
 services:
