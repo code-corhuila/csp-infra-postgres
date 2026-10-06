@@ -24,6 +24,23 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 The `include` paths of `compose.yml` assume that every repository is cloned next to this one. A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
+## The booking slice
+
+`compose.yml` runs the single PostgreSQL instance of the environment (Annex J) and includes `csp-booking-db`,
+`csp-booking-api` and `csp-worker`. The migration executor of a `-db` repository is a tooling service: it does
+not start with `up`, it is run once per environment and again whenever a migration is added.
+
+```bash
+cp env/.env.develop.example .env      # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD and WORKER_APP_PASSWORD
+./scripts/dev-keys.sh                 # develop only: JWT_PUBLIC_KEY and the SERVICE_TOKEN of csp-worker
+./scripts/up.sh
+docker compose --env-file .env run --rm booking-db-migrate
+```
+
+Until the schema is migrated, `GET /health/ready` of the booking service answers `503` and the worker logs the
+failed sweep with its correlation id; the next sweep works. Then `csp-worker` calls the expiration operation of
+`csp-booking-api` every minute with its service token.
+
 ## Rules
 
 - **No secret is versioned.** `env/*.example` carries names and placeholders only; `keys/` and `.env` are git-ignored.

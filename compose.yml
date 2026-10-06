@@ -2,10 +2,34 @@
 # services; this file only puts them together and adds what belongs to no domain.
 name: csp-platform
 
-# include:
-#   - path: ../csp-booking-db/deploy/compose.yml   # one line per repository the team runs
+include:
+  - path: ../csp-booking-db/deploy/compose.yml
+  - path: ../csp-booking-api/deploy/compose.yml
+  - path: ../csp-worker/deploy/compose.yml
+  # one line per repository the team runs
 
 services:
+  # The single PostgreSQL instance of the environment, with its single volume (Annex J). The -db repositories
+  # only bring the executor that migrates their schema into it.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:?set PG_DATABASE}
+      POSTGRES_USER: ${PG_ADMIN_USER:?set PG_ADMIN_USER}
+      POSTGRES_PASSWORD: ${PG_ADMIN_PASSWORD:?set PG_ADMIN_PASSWORD}
+      BOOKING_APP_PASSWORD: ${BOOKING_APP_PASSWORD:?set BOOKING_APP_PASSWORD}
+      WORKER_APP_PASSWORD: ${WORKER_APP_PASSWORD:?set WORKER_APP_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_ADMIN_USER} -d ${PG_DATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    expose: ["5432"]
+    networks: [platform]
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.108.0
     command: ["--config=/etc/otel/config.yaml"]
@@ -28,6 +52,9 @@ services:
       - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml:ro
     ports: ["3000:3000"]
     networks: [platform]
+
+volumes:
+  postgres-data:
 
 networks:
   platform:
