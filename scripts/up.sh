@@ -4,6 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 [ -f .env ] || { echo "missing .env: cp env/.env.develop.example .env"; exit 1; }
 grep -q '^JWT_PUBLIC_KEY=.' .env || { echo "JWT_PUBLIC_KEY is empty: run ./scripts/dev-keys.sh (develop only)"; exit 1; }
+grep -Eq '^SERVICE_TOKEN=.|^SERVICE_TOKEN_FILE=.' .env || { echo "SERVICE_TOKEN (or SERVICE_TOKEN_FILE) is empty: csp-worker would be refused by the booking service; run ./scripts/dev-keys.sh (develop only)"; exit 1; }
 docker network inspect platform >/dev/null 2>&1 || docker network create platform
 docker compose --env-file .env up -d --build
 docker compose ps

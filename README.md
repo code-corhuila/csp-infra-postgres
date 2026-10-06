@@ -1,11 +1,11 @@
 # csp-infra
 
-> Compose, observability, environments and development identity
+> The PostgreSQL instance of the platform, its composition, observability, environments and development identity
 
 Part of the **Cinesync Platform (CSP)** distributed system, Grupo 1.
 Governance and documentation live in [`csp-docs`](https://github.com/code-corhuila/csp-docs).
 
-Assembles the whole system. **It composes; it does not contain.** Every runnable repository ships its own
+This repository is the one Annex J (J.8) renamed from `csp-infra` to `csp-infra-postgres`: it **defines the single PostgreSQL instance** of each environment (container, volume, login users, one env file per environment), and it keeps the **root composition** of the platform there (J.8.1). Apart from that instance, **it composes; it does not contain.** Every runnable repository ships its own
 `deploy/compose.yml`; this repository includes them, creates the shared network and adds the cross-cutting
 services that belong to no domain: observability.
 
@@ -21,7 +21,7 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one. A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-worker`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
