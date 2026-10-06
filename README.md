@@ -21,7 +21,7 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-worker`). A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
@@ -40,6 +40,18 @@ docker compose --env-file env/dev.env run --rm booking-db-migrate
 Until the schema is migrated, `GET /health/ready` of the booking service answers `503` and the worker logs the
 failed sweep with its correlation id; the next sweep works. Then `csp-worker` calls the expiration operation of
 `csp-booking-api` every minute with its service token.
+
+## The MongoDB instance
+
+The single MongoDB instance (Annex J) is defined in `csp-infra-mongo`, which has its own `compose.yml` and includes the
+executor of `csp-catalog-db`. This repository includes it, so one `up.sh` starts both engines on the `platform`
+network, and the two infrastructure repositories never talk to each other: services reach `postgres:5432` and
+`mongodb:27017` by name. The MongoDB variables (`MONGO_ADMIN_*`, `MONGO_KEYFILE`, `CATALOG_DB_*`) live in the same
+`env/<environment>.env`; `WORKER_APP_PASSWORD` is the password of `worker_app` in both engines.
+
+```bash
+docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migrate
+```
 
 ## One environment, one project, one volume
 
