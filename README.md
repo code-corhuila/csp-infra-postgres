@@ -11,11 +11,11 @@ services that belong to no domain: observability.
 
 ```
 compose.yml                    root: includes every repository, adds observability
-env/.env.<environment>.example one file per environment: develop, qa, main
+env/<environment>.env.example    one file per environment: dev, qa, main (Annex J.5.1)
 observability/                 OpenTelemetry collector, Prometheus, Grafana
-scripts/up.sh                  checks .env, creates the network and brings everything up
+scripts/up.sh [dev|qa|main]    checks env/<environment>.env, creates the network and brings everything up
 scripts/down.sh
-scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY and SERVICE_TOKEN in .env
+scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY and SERVICE_TOKEN in env/dev.env
 scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a subject
 ```
 
@@ -31,19 +31,23 @@ sibling fails loudly on `up`: nothing is silently skipped.
 not start with `up`, it is run once per environment and again whenever a migration is added.
 
 ```bash
-cp env/.env.develop.example .env      # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD and WORKER_APP_PASSWORD
-./scripts/dev-keys.sh                 # develop only: JWT_PUBLIC_KEY and the SERVICE_TOKEN of csp-worker
+cp env/dev.env.example env/dev.env  # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD and WORKER_APP_PASSWORD
+./scripts/dev-keys.sh                 # dev only: JWT_PUBLIC_KEY and the SERVICE_TOKEN of csp-worker
 ./scripts/up.sh
-docker compose --env-file .env run --rm booking-db-migrate
+docker compose --env-file env/dev.env run --rm booking-db-migrate
 ```
 
 Until the schema is migrated, `GET /health/ready` of the booking service answers `503` and the worker logs the
 failed sweep with its correlation id; the next sweep works. Then `csp-worker` calls the expiration operation of
 `csp-booking-api` every minute with its service token.
 
+## One environment, one project, one volume
+
+Annex J.5 gives each environment its own env file (`env/dev.env`, `env/qa.env`, `env/main.env`, created from the `.example` files) and fixes in it its `COMPOSE_PROJECT_NAME` (`csp-dev`, `csp-qa`, `csp-main`), so every environment has its own container and its own volume. `./scripts/up.sh [dev|qa|main]` and `./scripts/down.sh [dev|qa|main]` take the environment (default `dev`). In qa and main the volume is the history of the system: `docker compose down -v` is never run and the database is backed up before migrating (J.5.4).
+
 ## Rules
 
-- **No secret is versioned.** `env/*.example` carries names and placeholders only; `keys/` and `.env` are git-ignored.
+- **No secret is versioned.** `env/*.example` carries names and placeholders only; `keys/` and the real `env/*.env` files are git-ignored.
 - **Development keys are not the identity service.** `dev-keys.sh` exists so the system runs before the identity
   domain exists. In qa and main the public key and the service tokens come from the identity service, injected as
   secrets. The service token of `csp-worker` carries `sub` = `csp-worker`: the booking service only lets that
@@ -51,7 +55,7 @@ failed sweep with its correlation id; the next sweep works. Then `csp-worker` ca
 - **One network, `platform`,** created by `scripts/up.sh`. Every repository joins it.
 
 ```bash
-cp env/.env.develop.example .env
+cp env/dev.env.example env/dev.env
 ./scripts/dev-keys.sh                 # develop only
 ./scripts/up.sh
 ./scripts/dev-token.sh <subject> [minutes]
