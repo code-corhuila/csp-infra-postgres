@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 # Creates the shared network (idempotent) and brings the platform up for one environment (Annex J.5).
-# usage: ./scripts/up.sh [dev|qa|main]     (default: dev)
+# usage: ./scripts/up.sh dev|qa|main     (the environment is required: there is no default)
 set -eu
 cd "$(dirname "$0")/.."
-environment="${1:-dev}"
-case "$environment" in dev|qa|main) ;; *) echo "usage: $0 [dev|qa|main]"; exit 1 ;; esac
+environment="${1:-}"
+case "$environment" in dev|qa|main) ;; *) echo "usage: $0 dev|qa|main"; exit 1 ;; esac
 env_file="env/$environment.env"
 [ -f "$env_file" ] || { echo "missing $env_file: cp env/$environment.env.example $env_file"; exit 1; }
 grep -q '^JWT_PUBLIC_KEY=.' "$env_file" || { echo "JWT_PUBLIC_KEY is empty in $env_file: run ./scripts/dev-keys.sh (dev only)"; exit 1; }

@@ -13,7 +13,7 @@ services that belong to no domain: observability.
 compose.yml                    root: includes every repository, adds observability
 env/<environment>.env.example    one file per environment: dev, qa, main (Annex J.5.1)
 observability/                 OpenTelemetry collector, Prometheus, Grafana
-scripts/up.sh [dev|qa|main]    checks env/<environment>.env, creates the network and brings everything up
+scripts/up.sh dev|qa|main     checks env/<environment>.env, creates the network and brings everything up
 scripts/down.sh
 scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY and SERVICE_TOKEN in env/dev.env
 scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a subject
@@ -33,7 +33,7 @@ not start with `up`, it is run once per environment and again whenever a migrati
 ```bash
 cp env/dev.env.example env/dev.env  # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD and WORKER_APP_PASSWORD
 ./scripts/dev-keys.sh                 # dev only: JWT_PUBLIC_KEY and the SERVICE_TOKEN of csp-worker
-./scripts/up.sh
+./scripts/up.sh dev
 docker compose --env-file env/dev.env run --rm booking-db-migrate
 ```
 
@@ -43,7 +43,7 @@ failed sweep with its correlation id; the next sweep works. Then `csp-worker` ca
 
 ## One environment, one project, one volume
 
-Annex J.5 gives each environment its own env file (`env/dev.env`, `env/qa.env`, `env/main.env`, created from the `.example` files) and fixes in it its `COMPOSE_PROJECT_NAME` (`csp-dev`, `csp-qa`, `csp-main`), so every environment has its own container and its own volume. `./scripts/up.sh [dev|qa|main]` and `./scripts/down.sh [dev|qa|main]` take the environment (default `dev`). In qa and main the volume is the history of the system: `docker compose down -v` is never run and the database is backed up before migrating (J.5.4).
+Annex J.5 gives each environment its own env file (`env/dev.env`, `env/qa.env`, `env/main.env`, created from the `.example` files) and fixes in it its `COMPOSE_PROJECT_NAME` (`csp-dev`, `csp-qa`, `csp-main`), so every environment has its own container and its own volume. `./scripts/up.sh dev|qa|main` and `./scripts/down.sh dev|qa|main` take the environment as a required argument: there is no default, so a script run on a qa or main host never acts on `dev` by accident. In qa and main the volume is the history of the system: `docker compose down -v` is never run and the database is backed up before migrating (J.5.4).
 
 ## Rules
 
@@ -57,7 +57,7 @@ Annex J.5 gives each environment its own env file (`env/dev.env`, `env/qa.env`, 
 ```bash
 cp env/dev.env.example env/dev.env
 ./scripts/dev-keys.sh                 # develop only
-./scripts/up.sh
+./scripts/up.sh dev
 ./scripts/dev-token.sh <subject> [minutes]
 ```
 
