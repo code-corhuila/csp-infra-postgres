@@ -15,13 +15,13 @@ env/<environment>.env.example    one file per environment: dev, qa, main (Annex 
 observability/                 OpenTelemetry collector, Prometheus, Grafana
 scripts/up.sh dev|qa|main     checks env/<environment>.env, creates the network and brings everything up
 scripts/down.sh
-scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY and SERVICE_TOKEN in env/dev.env
+scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY, SERVICE_TOKEN and APP_AUTH_JWT_PRIVATE_KEY in env/dev.env
 scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a subject
 ```
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`). A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
@@ -40,6 +40,34 @@ docker compose --env-file env/dev.env run --rm booking-db-migrate
 Until the schema is migrated, `GET /health/ready` of the booking service answers `503` and the worker logs the
 failed sweep with its correlation id; the next sweep works. Then `csp-worker` calls the expiration operation of
 `csp-booking-api` every minute with its service token.
+
+## The auth slice
+
+`compose.yml` also includes `csp-auth-db` (the migration executor `auth-db-migrate`) and `csp-auth-api`. The
+instance creates the login `auth_app` (password `AUTH_APP_PASSWORD`) with `search_path = auth`; the executor connects
+with the administrator, like booking's. The migration `V013` grants `auth_writer` to `auth_app` and
+`auth_outbox_reader` to `worker_app`, so both logins must exist **before** the migration runs: that is why the
+instance creates them and the executor does not.
+
+```bash
+cp env/dev.env.example env/dev.env  # also set AUTH_APP_PASSWORD, URL-safe because it goes inside APP_AUTH_DATABASE_URL: openssl rand -hex 24
+./scripts/dev-keys.sh                 # dev only: also APP_AUTH_JWT_PRIVATE_KEY, the private half of the pair every service validates with
+./scripts/up.sh dev
+docker compose --env-file env/dev.env --profile tooling run --rm auth-db-migrate
+```
+
+Run the executor before using the API: until the schema is migrated, the API has no tables to work with. In qa and
+main `APP_AUTH_JWT_PRIVATE_KEY` is injected as a secret by the owner of the identity service and is never versioned;
+the development key never leaves `develop`.
+
+**An environment that already exists** has a volume, so the init script does not run again (Annex J.5.5). Add the
+login once by hand: recreate the `postgres` container so it receives `AUTH_APP_PASSWORD` (the volume and its data are
+kept), then run the same script, which is idempotent.
+
+```bash
+docker compose --env-file env/dev.env up -d postgres
+docker compose --env-file env/dev.env exec -T postgres sh /docker-entrypoint-initdb.d/01-instance.sh
+```
 
 ## The MongoDB instance
 
