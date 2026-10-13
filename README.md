@@ -60,6 +60,8 @@ Run the executor before using the API: until the schema is migrated, the API has
 main `APP_AUTH_JWT_PRIVATE_KEY` is injected as a secret by the owner of the identity service and is never versioned;
 the development key never leaves `develop`.
 
+The signing key of auth (`APP_AUTH_JWT_PRIVATE_KEY`) is a secret that sits in the same env files as the database credentials, so in `qa` and `main` it is injected as a secret by the owner of the identity service and the example files only carry the empty placeholder. A leaked env file of those environments exposes both the database access and the ability to sign tokens, so the real files are never versioned (they are git-ignored) and are readable only by the people who operate the environment.
+
 **An environment that already exists** has a volume, so the init script does not run again (Annex J.5.5). Add the
 login once by hand: recreate the `postgres` container so it receives `AUTH_APP_PASSWORD` (the volume and its data are
 kept), then run the same script, which is idempotent.
