@@ -103,7 +103,7 @@ from `env/<environment>.env.example`) before running `./scripts/up.sh`: the Redi
 ## The API gateway
 
 The API gateway (`csp-api-gateway`, NGINX) is included from `../csp-api-gateway/deploy/compose.yml`, so `csp-api-gateway` must be
-cloned as a sibling of this repository. It is the **only service published to the host** (port `8000`); every other service,
+cloned as a sibling of this repository. It is the **only application service published to the host** (port `8000`; Grafana and Prometheus bind loopback only); every other service,
 and the databases, are reachable only on the `platform` network. It routes `/api/v1/<domain>/...` to the owning service and
 does not validate tokens (each service does).
 
