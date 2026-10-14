@@ -21,7 +21,7 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`). A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-infra-redis`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
@@ -81,6 +81,23 @@ network, and the two infrastructure repositories never talk to each other: servi
 
 ```bash
 docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migrate
+```
+
+## The Redis instance
+
+The single Redis instance (Annex J) is defined in `csp-infra-redis`, which has its own `compose.yml`; `csp-infra-redis` must be
+cloned as a sibling of this repository. This repository includes it, so one `up.sh` starts PostgreSQL, MongoDB and Redis on
+the `platform` network, and services reach `redis:6379` by name. Redis keeps the auth state (attempt counters, temporary
+lockout, revoked `jti`) and has no persistence. Its variables live in the same `env/<environment>.env`: `REDIS_ADMIN_PASSWORD`,
+`AUTH_REDIS_PASSWORD` (URL-safe, because it goes inside `APP_AUTH_REDIS_URL`: `openssl rand -hex 24`) and `APP_AUTH_REDIS_URL`.
+In qa and main the passwords are injected as environment secrets; the example files only carry the empty placeholders and the real
+env files are never versioned.
+
+**An environment that already exists** has an env file created before Redis, so add the two Redis variables to it (copy the block
+from `env/<environment>.env.example`) before running `./scripts/up.sh`: the Redis service reads them from there.
+
+```bash
+./scripts/up.sh dev
 ```
 
 ## One environment, one project, one volume

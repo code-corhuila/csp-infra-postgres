@@ -7,6 +7,9 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- Composition of the Redis instance: `include` of `csp-infra-redis` in `compose.yml`, the Redis variables
+  (`REDIS_ADMIN_PASSWORD`, `AUTH_REDIS_PASSWORD`, `APP_AUTH_REDIS_URL`) in the three `env/*.env.example` files and the README steps
+  (sibling checkout, order, variables to add to an existing environment).
 - Composition of the auth service: `include` of `csp-auth-db` (migration executor `auth-db-migrate`) and `csp-auth-api`, the login
   `auth_app` with `search_path = auth` in `postgres/init/01-instance.sh`, the auth variables in the three `env/*.env.example`
   files, the development signing key written by `scripts/dev-keys.sh`, and the README steps (migrate before starting auth).
