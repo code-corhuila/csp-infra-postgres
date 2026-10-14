@@ -21,7 +21,7 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-infra-redis`). A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-infra-redis`, `csp-api-gateway`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
@@ -99,6 +99,21 @@ from `env/<environment>.env.example`) before running `./scripts/up.sh`: the Redi
 ```bash
 ./scripts/up.sh dev
 ```
+
+## The API gateway
+
+The API gateway (`csp-api-gateway`, NGINX) is included from `../csp-api-gateway/deploy/compose.yml`, so `csp-api-gateway` must be
+cloned as a sibling of this repository. It is the **only service published to the host** (port `8000`); every other service,
+and the databases, are reachable only on the `platform` network. It routes `/api/v1/<domain>/...` to the owning service and
+does not validate tokens (each service does).
+
+Its only variable is `APP_GATEWAY_CORS_ORIGIN_REGEX`, the browser origins it allows, as a regular expression that the gateway
+anchors as `^...$`. In dev the example file carries the scaffold default (shell on `4200`, remotes on `4201`-`4205`); in qa and
+main it is a placeholder and the real origins of the environment go there (the real env files are never versioned).
+
+**An environment that already exists** has an env file created before the gateway, so add `APP_GATEWAY_CORS_ORIGIN_REGEX` to it
+(copy the line from `env/<environment>.env.example`) before running `./scripts/up.sh`. Without it, the gateway falls back to
+its development default, which allows only `localhost` origins.
 
 ## One environment, one project, one volume
 
