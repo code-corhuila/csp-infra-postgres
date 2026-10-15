@@ -125,7 +125,9 @@ Annex J.5 gives each environment its own env file (`env/dev.env`, `env/qa.env`, 
 - **Development keys are not the identity service.** `dev-keys.sh` exists so the system runs before the identity
   domain exists. In qa and main the public key and the service tokens come from the identity service, injected as
   secrets. The service token of `csp-worker` carries `sub` = `csp-worker`: the booking service only lets that
-  subject call its internal operations.
+  subject call its internal operations, and `SERVICE_SUBJECTS=csp-worker` lets the same token call the purge operation
+  of the identity service (`PURGE_AUTH_ENABLED`). The development token comes from `scripts/dev-keys.sh`; in qa and main
+  it comes from the secret manager (`SERVICE_TOKEN_FILE`), because the identity service issues no service credentials.
 - **One network, `platform`,** created by `scripts/up.sh`. Every repository joins it.
 
 ```bash
