@@ -5,8 +5,12 @@ name: csp-platform
 include:
   - path: ../csp-booking-db/deploy/compose.yml
   - path: ../csp-booking-api/deploy/compose.yml
+  - path: ../csp-auth-db/deploy/compose.yml
+  - path: ../csp-auth-api/deploy/compose.yml
   - path: ../csp-worker/deploy/compose.yml
   - path: ../csp-infra-mongo/compose.yml
+  - path: ../csp-infra-redis/compose.yml
+  - path: ../csp-api-gateway/deploy/compose.yml
   # one line per repository the team runs
 
 services:
@@ -19,6 +23,7 @@ services:
       POSTGRES_USER: ${PG_ADMIN_USER:?set PG_ADMIN_USER}
       POSTGRES_PASSWORD: ${PG_ADMIN_PASSWORD:?set PG_ADMIN_PASSWORD}
       BOOKING_APP_PASSWORD: ${BOOKING_APP_PASSWORD:?set BOOKING_APP_PASSWORD}
+      AUTH_APP_PASSWORD: ${AUTH_APP_PASSWORD:?set AUTH_APP_PASSWORD}
       WORKER_APP_PASSWORD: ${WORKER_APP_PASSWORD:?set WORKER_APP_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
