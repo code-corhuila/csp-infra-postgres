@@ -5,6 +5,8 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-15
+
 ### Added
 
 - Purge of the identity service in the platform environment: `SERVICE_SUBJECTS` (read by `csp-auth-api`) and `PURGE_AUTH_ENABLED`
