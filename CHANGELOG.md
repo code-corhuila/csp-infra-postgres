@@ -7,6 +7,9 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- Purge of the identity service in the platform environment: `SERVICE_SUBJECTS` (read by `csp-auth-api`) and `PURGE_AUTH_ENABLED`
+  (read by `csp-worker`) in the three `env/*.env.example` files (enabled in dev, off in qa and main until the secret manager
+  provides the service token) and the README note on the service token.
 - Composition of the API gateway: `include` of `csp-api-gateway` in `compose.yml` (the only service published to the host, port
   `8000`), the `APP_GATEWAY_CORS_ORIGIN_REGEX` variable in the three `env/*.env.example` files and the README section (sibling
   checkout, CORS variable, step for an existing environment).
