@@ -42,7 +42,7 @@ The migration executor of `csp-booking-db` does not connect as the administrator
 migrations create the roles of the domain (on PostgreSQL 16 that only lets it manage the roles it creates) and `CREATE` on
 the database, which PostgreSQL requires even for `CREATE SCHEMA IF NOT EXISTS`. The pattern is `<domain>_migrator`; auth
 follows in its own change. **An environment that already exists** adds `BOOKING_MIGRATOR_PASSWORD` to its env file, recreates
-the `postgres` container and runs the init script once by hand (see the command at the end of the auth slice): the script
+the `postgres` container and runs the init script once by hand (see "An existing environment: switch to the migrators"): the script
 moves the schema, its tables and the control table to `booking_migrator` (and the same for `auth_migrator`), and then
 `BOOKING_DB_USER`, `BOOKING_DB_PASSWORD`, `AUTH_DB_USER` and `AUTH_DB_PASSWORD` point to them.
 
@@ -80,6 +80,51 @@ kept), then run the same script, which is idempotent.
 docker compose --env-file env/dev.env up -d postgres
 docker compose --env-file env/dev.env exec -T postgres sh /docker-entrypoint-initdb.d/01-instance.sh
 ```
+
+### An existing environment: switch to the migrators
+
+Do it in this order, once per environment (dev, qa, main), with `env/<environment>.env`. It was rehearsed with the real
+compose and executors, on an environment already migrated as the administrator.
+
+1. **Back up first** (Annex J.5.4). The database and the logins are saved separately, and a restore into a new instance
+   needs both: `pg_dump` alone does not carry the roles (`booking_migrator`, `auth_app`...).
+
+   ```bash
+   docker compose --env-file env/qa.env exec -T postgres sh -c "pg_dump -U postgres -d csp -Fc -f /tmp/csp.dump && pg_dumpall -U postgres --globals-only > /tmp/globals.sql"
+   docker cp csp-qa-postgres-1:/tmp/csp.dump . && docker cp csp-qa-postgres-1:/tmp/globals.sql .
+   ```
+
+   To restore into an empty instance: `psql -U postgres -f globals.sql`, then `createdb csp` and `pg_restore -d csp csp.dump`.
+   The only error of the first step is that the role `postgres` already exists.
+2. **Add `BOOKING_MIGRATOR_PASSWORD` and `AUTH_MIGRATOR_PASSWORD` to the env file, above the `BOOKING_DB_*` and `AUTH_DB_*`
+   lines**, as in `env/*.env.example` (`openssl rand -hex 24`). Compose expands `${...}` in the order of the file: a password
+   defined below the line that uses it expands to an empty string and the executor connects without one. In qa and main
+   they are injected as secrets, never versioned.
+3. **Recreate `postgres`** so it receives the variables; the volume and its data are kept. Without them Compose stops with
+   `set BOOKING_MIGRATOR_PASSWORD`.
+
+   ```bash
+   docker compose --env-file env/qa.env up -d postgres
+   ```
+4. **Run the init script once**, by hand; it is idempotent. It creates both logins and moves the schemas, their tables and the
+   control tables to them.
+
+   ```bash
+   docker compose --env-file env/qa.env exec -T postgres sh /docker-entrypoint-initdb.d/01-instance.sh
+   ```
+5. **Check the owners.** `booking` and `auth` must belong to `booking_migrator` and `auth_migrator`.
+
+   ```bash
+   docker compose --env-file env/qa.env exec -T postgres psql -U postgres -d csp -c "select nspname, nspowner::regrole from pg_namespace where nspname in ('auth','booking')"
+   ```
+6. **Only now** set `BOOKING_DB_USER=booking_migrator`, `BOOKING_DB_PASSWORD=${BOOKING_MIGRATOR_PASSWORD}`,
+   `AUTH_DB_USER=auth_migrator` and `AUTH_DB_PASSWORD=${AUTH_MIGRATOR_PASSWORD}`, and run the executors; with nothing pending they
+   answer `No migration necessary`. Switching before step 4 fails, because the logins do not exist yet.
+
+   ```bash
+   docker compose --env-file env/qa.env --profile tooling run --rm booking-db-migrate
+   docker compose --env-file env/qa.env --profile tooling run --rm auth-db-migrate
+   ```
 
 ## The MongoDB instance
 
