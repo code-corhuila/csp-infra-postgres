@@ -7,6 +7,9 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- README: the steps of an existing environment to switch to the migrators, in the order that was rehearsed (code-corhuila/csp-infra-postgres#20): back up first
+  (`pg_dump` and the roles, as a restore into a new instance needs both), define the migrator passwords above the `BOOKING_DB_*` and `AUTH_DB_*` lines (Compose
+  expands `${...}` in file order), recreate `postgres`, run `01-instance.sh` once, check the owners, then switch the executors.
 - Login `auth_migrator` for the migration executor of `csp-auth-db` (pattern `<domain>_migrator`, code-corhuila/csp-infra-postgres#18),
   the second domain after `booking_migrator`: `AUTH_MIGRATOR_PASSWORD` in `compose.yml` and the three `env/*.env.example` files, where
   `AUTH_DB_USER` and `AUTH_DB_PASSWORD` now point to it instead of the administrator. `postgres/init/01-instance.sh` keeps the bootstrap
