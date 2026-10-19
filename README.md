@@ -43,8 +43,8 @@ migrations create the roles of the domain (on PostgreSQL 16 that only lets it ma
 the database, which PostgreSQL requires even for `CREATE SCHEMA IF NOT EXISTS`. The pattern is `<domain>_migrator`; auth
 follows in its own change. **An environment that already exists** adds `BOOKING_MIGRATOR_PASSWORD` to its env file, recreates
 the `postgres` container and runs the init script once by hand (see the command at the end of the auth slice): the script
-moves the schema, its tables and the control table to `booking_migrator`, and then `BOOKING_DB_USER` and `BOOKING_DB_PASSWORD`
-point to it.
+moves the schema, its tables and the control table to `booking_migrator` (and the same for `auth_migrator`), and then
+`BOOKING_DB_USER`, `BOOKING_DB_PASSWORD`, `AUTH_DB_USER` and `AUTH_DB_PASSWORD` point to them.
 
 Until the schema is migrated, `GET /health/ready` of the booking service answers `503` and the worker logs the
 failed sweep with its correlation id; the next sweep works. Then `csp-worker` calls the expiration operation of
@@ -54,12 +54,13 @@ failed sweep with its correlation id; the next sweep works. Then `csp-worker` ca
 
 `compose.yml` also includes `csp-auth-db` (the migration executor `auth-db-migrate`) and `csp-auth-api`. The
 instance creates the login `auth_app` (password `AUTH_APP_PASSWORD`) with `search_path = auth`; the executor connects
-with the administrator, like booking's. The migration `V013` grants `auth_writer` to `auth_app` and
+as `auth_migrator` (password `AUTH_MIGRATOR_PASSWORD`), owner of the `auth` schema, with the same rights and the same
+bootstrap as `booking_migrator` (see the booking slice). The migration `V013` grants `auth_writer` to `auth_app` and
 `auth_outbox_reader` to `worker_app`, so both logins must exist **before** the migration runs: that is why the
 instance creates them and the executor does not.
 
 ```bash
-cp env/dev.env.example env/dev.env  # also set AUTH_APP_PASSWORD, URL-safe because it goes inside APP_AUTH_DATABASE_URL: openssl rand -hex 24
+cp env/dev.env.example env/dev.env  # also set AUTH_MIGRATOR_PASSWORD and AUTH_APP_PASSWORD, URL-safe because it goes inside APP_AUTH_DATABASE_URL: openssl rand -hex 24
 ./scripts/dev-keys.sh                 # dev only: also APP_AUTH_JWT_PRIVATE_KEY, the private half of the pair every service validates with
 ./scripts/up.sh dev
 docker compose --env-file env/dev.env --profile tooling run --rm auth-db-migrate
@@ -72,7 +73,7 @@ the development key never leaves `develop`.
 The signing key of auth (`APP_AUTH_JWT_PRIVATE_KEY`) is a secret that sits in the same env files as the database credentials, so in `qa` and `main` it is injected as a secret by the owner of the identity service and the example files only carry the empty placeholder. A leaked env file of those environments exposes both the database access and the ability to sign tokens, so the real files are never versioned (they are git-ignored) and are readable only by the people who operate the environment.
 
 **An environment that already exists** has a volume, so the init script does not run again (Annex J.5.5). Add the
-login once by hand: recreate the `postgres` container so it receives `AUTH_APP_PASSWORD` and `BOOKING_MIGRATOR_PASSWORD` (the volume and its data are
+login once by hand: recreate the `postgres` container so it receives `AUTH_APP_PASSWORD`, `BOOKING_MIGRATOR_PASSWORD` and `AUTH_MIGRATOR_PASSWORD` (the volume and its data are
 kept), then run the same script, which is idempotent.
 
 ```bash

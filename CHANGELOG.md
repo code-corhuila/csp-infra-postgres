@@ -12,6 +12,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 - Composition of the catalog: `include` of `csp-catalog-db` and `csp-catalog-api` in `compose.yml` (the service `catalog-api` on port `8082`, not
   published), and a README section (sibling checkout, `CATALOG_APP_PASSWORD`, the optional `CATALOG_SERVICE_SUBJECTS`, migrate before starting).
   `csp-infra-mongo` already includes the executor of `csp-catalog-db`, so that include is declared twice with the same file.
+- Login `auth_migrator` for the migration executor of `csp-auth-db` (pattern `<domain>_migrator`, code-corhuila/csp-infra-postgres#18),
+  the second domain after `booking_migrator`: `AUTH_MIGRATOR_PASSWORD` in `compose.yml` and the three `env/*.env.example` files, where
+  `AUTH_DB_USER` and `AUTH_DB_PASSWORD` now point to it instead of the administrator. `postgres/init/01-instance.sh` keeps the bootstrap
+  of a migrator in one function, `migrator()`, called once per domain.
 - Login `booking_migrator` for the migration executor of `csp-booking-db` (pattern `<domain>_migrator`, code-corhuila/csp-infra-postgres#16):
   `postgres/init/01-instance.sh` creates it idempotently with `CREATEROLE`, makes it owner of the `booking` schema, moves the existing tables
   and control table to it and gives it the admin option on the booking roles; `BOOKING_MIGRATOR_PASSWORD` in `compose.yml` and the three
