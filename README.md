@@ -76,7 +76,7 @@ docker compose --env-file env/dev.env exec -T postgres sh /docker-entrypoint-ini
 The single MongoDB instance (Annex J) is defined in `csp-infra-mongo`, which has its own `compose.yml` and includes the
 executor of `csp-catalog-db`. This repository includes it, so one `up.sh` starts both engines on the `platform`
 network, and the two infrastructure repositories never talk to each other: services reach `postgres:5432` and
-`mongodb:27017` by name. The MongoDB variables (`MONGO_ADMIN_*`, `MONGO_KEYFILE`, `CATALOG_DB_*`) live in the same
+`mongodb:27017` by name. The MongoDB variables (`MONGO_ADMIN_*`, `MONGO_KEYFILE`, `CATALOG_DB_*`, `CATALOG_APP_PASSWORD`) live in the same
 `env/<environment>.env`; `WORKER_APP_PASSWORD` is the password of `worker_app` in both engines.
 
 ```bash
