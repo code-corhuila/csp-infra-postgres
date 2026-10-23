@@ -5,6 +5,12 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ## [Unreleased]
 
+### Added
+
+- Composition of the catalog: `include` of `csp-catalog-db` and `csp-catalog-api` in `compose.yml` (the service `catalog-api` on port `8082`, not
+  published), and a README section (sibling checkout, `CATALOG_APP_PASSWORD`, the optional `CATALOG_SERVICE_SUBJECTS`, migrate before starting).
+  `csp-infra-mongo` already includes the executor of `csp-catalog-db`, so that include is declared twice with the same file.
+
 ### Changed
 
 - The three `env/*.env.example` files follow the catalog migrator of `csp-infra-mongo` (code-corhuila/csp-infra-mongo#9): `CATALOG_DB_USER=catalog_migrator`
