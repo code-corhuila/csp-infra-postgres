@@ -9,6 +9,9 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- Composition of the catalog: `include` of `csp-catalog-db` and `csp-catalog-api` in `compose.yml` (the service `catalog-api` on port `8082`, not
+  published), and a README section (sibling checkout, `CATALOG_APP_PASSWORD`, the optional `CATALOG_SERVICE_SUBJECTS`, migrate before starting).
+  `csp-infra-mongo` already includes the executor of `csp-catalog-db`, so that include is declared twice with the same file.
 - Purge of the identity service in the platform environment: `SERVICE_SUBJECTS` (read by `csp-auth-api`) and `PURGE_AUTH_ENABLED`
   (read by `csp-worker`) in the three `env/*.env.example` files (enabled in dev, off in qa and main until the secret manager
   provides the service token) and the README note on the service token.
