@@ -138,6 +138,15 @@ network, and the two infrastructure repositories never talk to each other: servi
 docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migrate
 ```
 
+## The SMTP relay of the identity service
+
+`csp-auth-api` sends the verification code of the email change through an SMTP relay (ADR-034). Its six variables
+(`APP_AUTH_SMTP_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_FROM`, `_TLS`) live in the same `env/<environment>.env` and reach the
+service through its own `deploy/compose.yml`. Without a host the two email-change routes answer `404`. In development the
+example points to the Mailpit catcher of `csp-auth-api` (`docker compose --profile mail up mailpit`); in qa and main the six
+values are injected as environment secrets and the example files only carry the empty placeholders; the real env files are never
+versioned. An existing environment copies the block from `env/<environment>.env.example` before the next `./scripts/up.sh`.
+
 ## The Redis instance
 
 The single Redis instance (Annex J) is defined in `csp-infra-redis`, which has its own `compose.yml`; `csp-infra-redis` must be
