@@ -21,7 +21,7 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-infra-redis`, `csp-api-gateway`). A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-catalog-api`, `csp-infra-redis`, `csp-api-gateway`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
@@ -81,6 +81,22 @@ network, and the two infrastructure repositories never talk to each other: servi
 
 ```bash
 docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migrate
+```
+
+## The catalog API
+
+`csp-catalog-api` is included from `../csp-catalog-api/deploy/compose.yml`, so it must be cloned as a sibling of this
+repository (`csp-catalog-db`, whose executor `csp-infra-mongo` already includes, is also listed in `compose.yml`). The service
+is `catalog-api` on port `8082` of the `platform` network and is not published to the host: only the gateway reaches it, and
+Booking calls it by name with its service credential (`http://catalog-api:8082/api/v1/catalog`). It logs in to MongoDB as `catalog_app`, so
+`CATALOG_APP_PASSWORD` is required, and it validates tokens with the same `JWT_PUBLIC_KEY` as the other services. `SERVICE_SUBJECTS`
+of the platform belongs to `csp-worker`; the subjects the catalog accepts on its availability route come from the optional
+`CATALOG_SERVICE_SUBJECTS` (default `booking-service`). Run the migration executor before starting the service, so that
+`catalog_app` already holds `catalog_writer`:
+
+```bash
+docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migrate
+docker compose --env-file env/dev.env up -d --build catalog-api
 ```
 
 ## The Redis instance

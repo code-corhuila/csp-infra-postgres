@@ -9,6 +9,8 @@ include:
   - path: ../csp-auth-api/deploy/compose.yml
   - path: ../csp-worker/deploy/compose.yml
   - path: ../csp-infra-mongo/compose.yml
+  - path: ../csp-catalog-db/deploy/compose.yml
+  - path: ../csp-catalog-api/deploy/compose.yml
   - path: ../csp-infra-redis/compose.yml
   - path: ../csp-api-gateway/deploy/compose.yml
   # one line per repository the team runs
