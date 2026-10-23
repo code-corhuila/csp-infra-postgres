@@ -26,6 +26,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Changed
 
+- The three `env/*.env.example` files follow the catalog migrator of `csp-infra-mongo` (code-corhuila/csp-infra-mongo#9): `CATALOG_DB_USER=catalog_migrator`
+  (the owner of `catalog_db`, used by the executor of `csp-catalog-db`) and the new `CATALOG_APP_PASSWORD` of `catalog_app`, the login of
+  `csp-catalog-api`, which has no role of its own until `csp-catalog-db` grants `catalog_writer`. Without the variable the Mongo compose
+  refuses to start. An existing environment switches by hand, in the order of the README of `csp-infra-mongo`.
 - The "URL-safe" note of the env examples sits above `AUTH_APP_PASSWORD`, the password that goes inside
   `APP_AUTH_DATABASE_URL`, and the README documents the auth signing key as a secret.
   ([#10](https://github.com/code-corhuila/csp-infra-postgres/pull/10))
