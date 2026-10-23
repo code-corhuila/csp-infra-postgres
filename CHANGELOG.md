@@ -7,6 +7,8 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- The SMTP relay of `csp-auth-api` in the three `env/*.env.example` files (`APP_AUTH_SMTP_*`: the Mailpit catcher in development, empty
+  placeholders for the secrets of qa and main) and a README section, so the platform passes them to the email change of HU-AUTH-004 (ADR-034).
 - README: the steps of an existing environment to switch to the migrators, in the order that was rehearsed (code-corhuila/csp-infra-postgres#20): back up first
   (`pg_dump` and the roles, as a restore into a new instance needs both), define the migrator passwords above the `BOOKING_DB_*` and `AUTH_DB_*` lines (Compose
   expands `${...}` in file order), recreate `postgres`, run `01-instance.sh` once, check the owners, then switch the executors.
