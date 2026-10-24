@@ -7,6 +7,7 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Changed
 
+- qa: `PURGE_AUTH_ENABLED` is `true` in `env/qa.env.example`. The service token of `csp-worker` is loaded as an environment secret of qa (ADR-030, ADR-020); `main` stays `false` until it has its own key pair.
 - The three `env/*.env.example` files follow the catalog migrator of `csp-infra-mongo` (code-corhuila/csp-infra-mongo#9): `CATALOG_DB_USER=catalog_migrator`
   (the owner of `catalog_db`, used by the executor of `csp-catalog-db`) and the new `CATALOG_APP_PASSWORD` of `catalog_app`, the login of
   `csp-catalog-api`, which has no role of its own until `csp-catalog-db` grants `catalog_writer`. Without the variable the Mongo compose
