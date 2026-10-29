@@ -163,6 +163,24 @@ example points to the Mailpit catcher of `csp-auth-api` (`docker compose --profi
 values are injected as environment secrets and the example files only carry the empty placeholders; the real env files are never
 versioned. An existing environment copies the block from `env/<environment>.env.example` before the next `./scripts/up.sh`.
 
+**Real provider in development, without depending on it.** The service keeps pointing at Mailpit (`APP_AUTH_SMTP_HOST=mailpit`,
+port `1025`, `APP_AUTH_SMTP_TLS=none`) and Mailpit relays the messages to a real SMTP provider, so every message is stored and shown
+at `http://localhost:8025` whatever the provider does. Set the `MAILPIT_RELAY_*` variables of `env/dev.env` (host, port, user,
+password, and `MAILPIT_RELAY_MATCHING`, a regular expression of the recipients that reach the provider: test addresses such as
+`@example.com` should not), keep `APP_AUTH_SMTP_FROM` on a sender the provider has verified, and start it:
+
+```bash
+./scripts/mailpit-relay.sh      # writes env/mailpit-relay.yml (git-ignored) and MAILPIT_RELAY_FILE
+docker compose --env-file env/dev.env --profile mail-relay up -d mailpit-relay    # instead of the profile `mail`
+```
+
+An expired key or a provider that is down makes the relay fail with an error in the Mailpit log (`docker logs csp-dev-mailpit-relay-1`),
+but Mailpit still accepts and stores the message, so the service and the local flows keep working; checked with an invalid key
+(`535 Authentication failed` in the log, `250` to the sender). The relay runs inside the SMTP session, so a slow or unreachable
+provider adds its delay to the answer Mailpit gives the service. To renew the key or change provider, edit the `MAILPIT_RELAY_*`
+variables and run `./scripts/mailpit-relay.sh` and the `up` command again; nothing else changes. Development only: qa and main use
+the six `APP_AUTH_SMTP_*` secrets directly.
+
 ## The Redis instance
 
 The single Redis instance (Annex J) is defined in `csp-infra-redis`, which has its own `compose.yml`; `csp-infra-redis` must be

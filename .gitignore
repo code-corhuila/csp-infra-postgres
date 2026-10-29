@@ -2,6 +2,7 @@
 .env.*
 !.env.*.example
 env/*.env
+env/mailpit-relay.yml
 !env/*.env.example
 keys/
 *.pem
