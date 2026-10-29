@@ -9,8 +9,9 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 - Development mail relay: `scripts/mailpit-relay.sh` renders `env/mailpit-relay.yml` (git-ignored) from the new `MAILPIT_RELAY_*` variables of `env/dev.env`
   (host, port, STARTTLS, user, password and the regular expression of the recipients to relay), for the profile `mail-relay` of `csp-auth-api`: Mailpit
-  stores every message and also relays the matching ones to a real SMTP provider, so the service never depends on the provider and an expired key
-  or a provider that is down only fails the relay. README section and variables in `env/dev.env.example`.
+  stores every message and also relays the matching ones to a real SMTP provider, so an expired key only fails the relay. A provider that is
+  unreachable or slow keeps Mailpit waiting inside the SMTP session and the synchronous email change answers `500`, while the password reset is
+  not affected (measured, table in the README). README section and variables in `env/dev.env.example`.
 - Composition of the catalog: `include` of `csp-catalog-db` and `csp-catalog-api` in `compose.yml` (the service `catalog-api` on port `8082`, not
   published), and a README section (sibling checkout, `CATALOG_APP_PASSWORD`, the optional `CATALOG_SERVICE_SUBJECTS`, migrate before starting).
   `csp-infra-mongo` already includes the executor of `csp-catalog-db`, so that include is declared twice with the same file.
