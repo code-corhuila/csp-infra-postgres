@@ -31,11 +31,20 @@ sibling fails loudly on `up`: nothing is silently skipped.
 not start with `up`, it is run once per environment and again whenever a migration is added.
 
 ```bash
-cp env/dev.env.example env/dev.env  # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD and WORKER_APP_PASSWORD
+cp env/dev.env.example env/dev.env  # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD, BOOKING_MIGRATOR_PASSWORD and WORKER_APP_PASSWORD
 ./scripts/dev-keys.sh                 # dev only: JWT_PUBLIC_KEY and the SERVICE_TOKEN of csp-worker
 ./scripts/up.sh dev
 docker compose --env-file env/dev.env run --rm booking-db-migrate
 ```
+
+The migration executor of `csp-booking-db` does not connect as the administrator: the instance creates the login
+`booking_migrator` (password `BOOKING_MIGRATOR_PASSWORD`), owner of the `booking` schema, with `CREATEROLE` because the
+migrations create the roles of the domain (on PostgreSQL 16 that only lets it manage the roles it creates) and `CREATE` on
+the database, which PostgreSQL requires even for `CREATE SCHEMA IF NOT EXISTS`. The pattern is `<domain>_migrator`; auth
+follows in its own change. **An environment that already exists** adds `BOOKING_MIGRATOR_PASSWORD` to its env file, recreates
+the `postgres` container and runs the init script once by hand (see "An existing environment: switch to the migrators"): the script
+moves the schema, its tables and the control table to `booking_migrator` (and the same for `auth_migrator`), and then
+`BOOKING_DB_USER`, `BOOKING_DB_PASSWORD`, `AUTH_DB_USER` and `AUTH_DB_PASSWORD` point to them.
 
 Until the schema is migrated, `GET /health/ready` of the booking service answers `503` and the worker logs the
 failed sweep with its correlation id; the next sweep works. Then `csp-worker` calls the expiration operation of
@@ -45,12 +54,13 @@ failed sweep with its correlation id; the next sweep works. Then `csp-worker` ca
 
 `compose.yml` also includes `csp-auth-db` (the migration executor `auth-db-migrate`) and `csp-auth-api`. The
 instance creates the login `auth_app` (password `AUTH_APP_PASSWORD`) with `search_path = auth`; the executor connects
-with the administrator, like booking's. The migration `V013` grants `auth_writer` to `auth_app` and
+as `auth_migrator` (password `AUTH_MIGRATOR_PASSWORD`), owner of the `auth` schema, with the same rights and the same
+bootstrap as `booking_migrator` (see the booking slice). The migration `V013` grants `auth_writer` to `auth_app` and
 `auth_outbox_reader` to `worker_app`, so both logins must exist **before** the migration runs: that is why the
 instance creates them and the executor does not.
 
 ```bash
-cp env/dev.env.example env/dev.env  # also set AUTH_APP_PASSWORD, URL-safe because it goes inside APP_AUTH_DATABASE_URL: openssl rand -hex 24
+cp env/dev.env.example env/dev.env  # also set AUTH_MIGRATOR_PASSWORD and AUTH_APP_PASSWORD, URL-safe because it goes inside APP_AUTH_DATABASE_URL: openssl rand -hex 24
 ./scripts/dev-keys.sh                 # dev only: also APP_AUTH_JWT_PRIVATE_KEY, the private half of the pair every service validates with
 ./scripts/up.sh dev
 docker compose --env-file env/dev.env --profile tooling run --rm auth-db-migrate
@@ -63,13 +73,58 @@ the development key never leaves `develop`.
 The signing key of auth (`APP_AUTH_JWT_PRIVATE_KEY`) is a secret that sits in the same env files as the database credentials, so in `qa` and `main` it is injected as a secret by the owner of the identity service and the example files only carry the empty placeholder. A leaked env file of those environments exposes both the database access and the ability to sign tokens, so the real files are never versioned (they are git-ignored) and are readable only by the people who operate the environment.
 
 **An environment that already exists** has a volume, so the init script does not run again (Annex J.5.5). Add the
-login once by hand: recreate the `postgres` container so it receives `AUTH_APP_PASSWORD` (the volume and its data are
+login once by hand: recreate the `postgres` container so it receives `AUTH_APP_PASSWORD`, `BOOKING_MIGRATOR_PASSWORD` and `AUTH_MIGRATOR_PASSWORD` (the volume and its data are
 kept), then run the same script, which is idempotent.
 
 ```bash
 docker compose --env-file env/dev.env up -d postgres
 docker compose --env-file env/dev.env exec -T postgres sh /docker-entrypoint-initdb.d/01-instance.sh
 ```
+
+### An existing environment: switch to the migrators
+
+Do it in this order, once per environment (dev, qa, main), with `env/<environment>.env`. It was rehearsed with the real
+compose and executors, on an environment already migrated as the administrator.
+
+1. **Back up first** (Annex J.5.4). The database and the logins are saved separately, and a restore into a new instance
+   needs both: `pg_dump` alone does not carry the roles (`booking_migrator`, `auth_app`...).
+
+   ```bash
+   docker compose --env-file env/qa.env exec -T postgres sh -c "pg_dump -U postgres -d csp -Fc -f /tmp/csp.dump && pg_dumpall -U postgres --globals-only > /tmp/globals.sql"
+   docker cp csp-qa-postgres-1:/tmp/csp.dump . && docker cp csp-qa-postgres-1:/tmp/globals.sql .
+   ```
+
+   To restore into an empty instance: `psql -U postgres -f globals.sql`, then `createdb csp` and `pg_restore -d csp csp.dump`.
+   The only error of the first step is that the role `postgres` already exists.
+2. **Add `BOOKING_MIGRATOR_PASSWORD` and `AUTH_MIGRATOR_PASSWORD` to the env file, above the `BOOKING_DB_*` and `AUTH_DB_*`
+   lines**, as in `env/*.env.example` (`openssl rand -hex 24`). Compose expands `${...}` in the order of the file: a password
+   defined below the line that uses it expands to an empty string and the executor connects without one. In qa and main
+   they are injected as secrets, never versioned.
+3. **Recreate `postgres`** so it receives the variables; the volume and its data are kept. Without them Compose stops with
+   `set BOOKING_MIGRATOR_PASSWORD`.
+
+   ```bash
+   docker compose --env-file env/qa.env up -d postgres
+   ```
+4. **Run the init script once**, by hand; it is idempotent. It creates both logins and moves the schemas, their tables and the
+   control tables to them.
+
+   ```bash
+   docker compose --env-file env/qa.env exec -T postgres sh /docker-entrypoint-initdb.d/01-instance.sh
+   ```
+5. **Check the owners.** `booking` and `auth` must belong to `booking_migrator` and `auth_migrator`.
+
+   ```bash
+   docker compose --env-file env/qa.env exec -T postgres psql -U postgres -d csp -c "select nspname, nspowner::regrole from pg_namespace where nspname in ('auth','booking')"
+   ```
+6. **Only now** set `BOOKING_DB_USER=booking_migrator`, `BOOKING_DB_PASSWORD=${BOOKING_MIGRATOR_PASSWORD}`,
+   `AUTH_DB_USER=auth_migrator` and `AUTH_DB_PASSWORD=${AUTH_MIGRATOR_PASSWORD}`, and run the executors; with nothing pending they
+   answer `No migration necessary`. Switching before step 4 fails, because the logins do not exist yet.
+
+   ```bash
+   docker compose --env-file env/qa.env --profile tooling run --rm booking-db-migrate
+   docker compose --env-file env/qa.env --profile tooling run --rm auth-db-migrate
+   ```
 
 ## The MongoDB instance
 
@@ -98,6 +153,15 @@ of the platform belongs to `csp-worker`; the subjects the catalog accepts on its
 docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migrate
 docker compose --env-file env/dev.env up -d --build catalog-api
 ```
+
+## The SMTP relay of the identity service
+
+`csp-auth-api` sends the verification code of the email change through an SMTP relay (ADR-034). Its six variables
+(`APP_AUTH_SMTP_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_FROM`, `_TLS`) live in the same `env/<environment>.env` and reach the
+service through its own `deploy/compose.yml`. Without a host the two email-change routes answer `404`. In development the
+example points to the Mailpit catcher of `csp-auth-api` (`docker compose --profile mail up mailpit`); in qa and main the six
+values are injected as environment secrets and the example files only carry the empty placeholders; the real env files are never
+versioned. An existing environment copies the block from `env/<environment>.env.example` before the next `./scripts/up.sh`.
 
 ## The Redis instance
 
