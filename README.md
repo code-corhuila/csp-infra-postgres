@@ -16,7 +16,7 @@ observability/                 OpenTelemetry collector, Prometheus, Grafana
 scripts/up.sh dev|qa|main     checks env/<environment>.env, creates the network and brings everything up
 scripts/down.sh
 scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY, SERVICE_TOKEN and APP_AUTH_JWT_PRIVATE_KEY in env/dev.env
-scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a subject
+scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a subject, with `iss` csp-auth and `aud` csp-internal (ADR-056)
 ```
 
 ## Repositories are cloned as siblings
