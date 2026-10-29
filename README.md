@@ -163,9 +163,10 @@ example points to the Mailpit catcher of `csp-auth-api` (`docker compose --profi
 values are injected as environment secrets and the example files only carry the empty placeholders; the real env files are never
 versioned. An existing environment copies the block from `env/<environment>.env.example` before the next `./scripts/up.sh`.
 
-**Real provider in development, without depending on it.** The service keeps pointing at Mailpit (`APP_AUTH_SMTP_HOST=mailpit`,
-port `1025`, `APP_AUTH_SMTP_TLS=none`) and Mailpit relays the messages to a real SMTP provider, so every message is stored and shown
-at `http://localhost:8025` whatever the provider does. Set the `MAILPIT_RELAY_*` variables of `env/dev.env` (host, port, user,
+**Real provider in development, with an expired key that does not break anything.** The service keeps pointing at Mailpit
+(`APP_AUTH_SMTP_HOST=mailpit`, port `1025`, `APP_AUTH_SMTP_TLS=none`) and Mailpit relays the messages to a real SMTP provider, so every
+message is shown at `http://localhost:8025`. Set `APP_AUTH_SMTP_TIMEOUT=15s` (the default, 5 s, is shorter than the handshake with the
+provider) and the `MAILPIT_RELAY_*` variables of `env/dev.env` (host, port, user,
 password, and `MAILPIT_RELAY_MATCHING`, a regular expression of the recipients that reach the provider: test addresses such as
 `@example.com` should not), keep `APP_AUTH_SMTP_FROM` on a sender the provider has verified, and start it:
 
@@ -174,12 +175,21 @@ password, and `MAILPIT_RELAY_MATCHING`, a regular expression of the recipients t
 docker compose --env-file env/dev.env --profile mail-relay up -d mailpit-relay    # instead of the profile `mail`
 ```
 
-An expired key or a provider that is down makes the relay fail with an error in the Mailpit log (`docker logs csp-dev-mailpit-relay-1`),
-but Mailpit still accepts and stores the message, so the service and the local flows keep working; checked with an invalid key
-(`535 Authentication failed` in the log, `250` to the sender). The relay runs inside the SMTP session, so a slow or unreachable
-provider adds its delay to the answer Mailpit gives the service. To renew the key or change provider, edit the `MAILPIT_RELAY_*`
-variables and run `./scripts/mailpit-relay.sh` and the `up` command again; nothing else changes. Development only: qa and main use
-the six `APP_AUTH_SMTP_*` secrets directly.
+What was checked, on the development environment with the real service (recipients at `@example.com`, a copy of the API on the same image):
+
+| Provider | Password reset (queued) | Email change (synchronous) |
+|---|---|---|
+| Expired key (`535 Authentication failed`), `APP_AUTH_SMTP_TIMEOUT=15s` | `202` at once | `202` in 1.2 s |
+| Unreachable, `APP_AUTH_SMTP_TIMEOUT=5s` | `202` at once | `500` at 5.0 s |
+| Unreachable, `APP_AUTH_SMTP_TIMEOUT=15s` | `202` at once | `500` at 10.2 s (the request deadline of 10 s) |
+
+An expired key makes the relay fail with an error in the Mailpit log (`docker logs csp-dev-mailpit-relay-1`) and nothing else: Mailpit still
+answers `250` and stores the message. A provider that is **unreachable or slow** is different: Mailpit relays inside the SMTP session, so it
+answers the service only when the relay gives up (about 20 s when the provider is unreachable, 40 s with a greeting delayed by 40 s). The email
+change sends its code synchronously and answers `500` when the timeout or the request deadline expires, although Mailpit stores the message
+afterwards (a retry can duplicate it). The password reset is queued, so it is not affected. If the provider is down, use the profile `mail`
+(no relay) until it is back. To renew the key or change provider, edit the `MAILPIT_RELAY_*` variables and run `./scripts/mailpit-relay.sh` and
+the `up` command again; nothing else changes. Development only: qa and main use the six `APP_AUTH_SMTP_*` secrets directly.
 
 ## The Redis instance
 
