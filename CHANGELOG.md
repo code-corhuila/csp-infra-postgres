@@ -5,6 +5,13 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ## [Unreleased]
 
+### Added
+
+- Development mail relay: `scripts/mailpit-relay.sh` renders `env/mailpit-relay.yml` (git-ignored) from the new `MAILPIT_RELAY_*` variables of `env/dev.env`
+  (host, port, STARTTLS, user, password and the regular expression of the recipients to relay), for the profile `mail-relay` of `csp-auth-api`: Mailpit
+  stores every message and also relays the matching ones to a real SMTP provider, so the service never depends on the provider and an expired key
+  or a provider that is down only fails the relay. README section and variables in `env/dev.env.example`.
+
 ### Changed
 
 - `scripts/dev-token.sh` adds `iss` `csp-auth` and `aud` `csp-internal` to the `sub`, `iat` and `exp` it already wrote (ADR-056), so the development
