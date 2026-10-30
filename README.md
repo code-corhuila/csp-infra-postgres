@@ -223,6 +223,29 @@ main it is a placeholder and the real origins of the environment go there (the r
 (copy the line from `env/<environment>.env.example`) before running `./scripts/up.sh`. Without it, the gateway falls back to
 its development default, which allows only `localhost` origins.
 
+## Prometheus: what it scrapes and the latency alert
+
+`observability/prometheus.yml` has two scrape jobs: `otel-collector` (`otel-collector:8889`) and `csp-auth-api`
+(`auth-api:8081`, path `/metrics`, on the `platform` network). `csp-auth-api` exports `auth_http_requests_total{route,method,outcome}` and
+`auth_http_request_duration_seconds{route,method}` (buckets 0.05, 0.1, 0.25, 0.5, 1 and 2.5 seconds). Those series exist only once a
+`csp-auth-api` that serves `/metrics` is deployed; until then the target shows as down in Prometheus and the alert has no data.
+
+`observability/alerts/auth-latency.yml` (mounted read-only into the Prometheus container, loaded by `rule_files`) holds the rule
+`AuthCredentialsLatencyP95AboveSlo`: the p95 of `POST /api/v1/auth/login` or `POST /api/v1/auth/register` above 1 second for 15 minutes,
+only for a route with at least 10 requests in those 15 minutes (a guard against the low traffic). Severity `ticket`, team `auth`. ADR-061 in
+`csp-docs` decides it (code-corhuila/csp-docs#281).
+
+**No Alertmanager route exists yet in this repository**: the alert is visible in Prometheus (`http://127.0.0.1:9090/alerts`) and nothing notifies anyone.
+
+The rule has unit tests (`observability/alerts/auth-latency.test.yml`). Run them, and the checks of the configuration, with the Prometheus image
+of `compose.yml` (no local installation):
+
+```bash
+docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 check rules alerts/auth-latency.yml
+docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 test rules alerts/auth-latency.test.yml
+docker run --rm --entrypoint promtool -v "$PWD/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro" -v "$PWD/observability/alerts:/etc/prometheus/alerts:ro" prom/prometheus:v2.54.1 check config /etc/prometheus/prometheus.yml
+```
+
 ## One environment, one project, one volume
 
 Annex J.5 gives each environment its own env file (`env/dev.env`, `env/qa.env`, `env/main.env`, created from the `.example` files) and fixes in it its `COMPOSE_PROJECT_NAME` (`csp-dev`, `csp-qa`, `csp-main`), so every environment has its own container and its own volume. `./scripts/up.sh dev|qa|main` and `./scripts/down.sh dev|qa|main` take the environment as a required argument: there is no default, so a script run on a qa or main host never acts on `dev` by accident. In qa and main the volume is the history of the system: `docker compose down -v` is never run and the database is backed up before migrating (J.5.4).
