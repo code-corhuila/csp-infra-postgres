@@ -1,0 +1,73 @@
+# Root composition. Each include is a sibling repository's own compose file: it defines its
+# services; this file only puts them together and adds what belongs to no domain.
+name: csp-platform
+
+include:
+  - path: ../csp-booking-db/deploy/compose.yml
+  - path: ../csp-booking-api/deploy/compose.yml
+  - path: ../csp-auth-db/deploy/compose.yml
+  - path: ../csp-auth-api/deploy/compose.yml
+  - path: ../csp-worker/deploy/compose.yml
+  - path: ../csp-infra-mongo/compose.yml
+  - path: ../csp-catalog-db/deploy/compose.yml
+  - path: ../csp-catalog-api/deploy/compose.yml
+  - path: ../csp-infra-redis/compose.yml
+  - path: ../csp-api-gateway/deploy/compose.yml
+  # one line per repository the team runs
+
+services:
+  # The single PostgreSQL instance of the environment, with its single volume (Annex J). The -db repositories
+  # only bring the executor that migrates their schema into it.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:?set PG_DATABASE}
+      POSTGRES_USER: ${PG_ADMIN_USER:?set PG_ADMIN_USER}
+      POSTGRES_PASSWORD: ${PG_ADMIN_PASSWORD:?set PG_ADMIN_PASSWORD}
+      BOOKING_APP_PASSWORD: ${BOOKING_APP_PASSWORD:?set BOOKING_APP_PASSWORD}
+      BOOKING_MIGRATOR_PASSWORD: ${BOOKING_MIGRATOR_PASSWORD:?set BOOKING_MIGRATOR_PASSWORD}
+      AUTH_MIGRATOR_PASSWORD: ${AUTH_MIGRATOR_PASSWORD:?set AUTH_MIGRATOR_PASSWORD}
+      AUTH_APP_PASSWORD: ${AUTH_APP_PASSWORD:?set AUTH_APP_PASSWORD}
+      WORKER_APP_PASSWORD: ${WORKER_APP_PASSWORD:?set WORKER_APP_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_ADMIN_USER} -d ${PG_DATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    expose: ["5432"]
+    networks: [platform]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otel/config.yaml:ro
+    networks: [platform]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts:/etc/prometheus/alerts:ro
+    ports: ["127.0.0.1:9090:9090"]
+    networks: [platform]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-false}
+    volumes:
+      - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml:ro
+    ports: ["127.0.0.1:3000:3000"]
+    networks: [platform]
+
+volumes:
+  postgres-data:
+
+networks:
+  platform:
+    name: platform
+    external: true
