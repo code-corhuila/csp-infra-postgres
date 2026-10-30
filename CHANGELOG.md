@@ -7,6 +7,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- Prometheus scrapes `csp-auth-api` (`auth-api:8081`, `/metrics`) and loads the rule `AuthCredentialsLatencyP95AboveSlo`
+  (`observability/alerts/auth-latency.yml`, mounted read-only in `compose.yml`): p95 of login or register above 1 second for 15 minutes, with a guard
+  of at least 10 requests in those 15 minutes. It has promtool unit tests and a README section; no Alertmanager route exists yet, so it only shows in
+  Prometheus. Refs code-corhuila/csp-docs#281 (technical issue #36).
 - Development mail relay: `scripts/mailpit-relay.sh` renders `env/mailpit-relay.yml` (git-ignored) from the new `MAILPIT_RELAY_*` variables of `env/dev.env`
   (host, port, STARTTLS, user, password and the regular expression of the recipients to relay), for the profile `mail-relay` of `csp-auth-api`: Mailpit
   stores every message and also relays the matching ones to a real SMTP provider, so an expired key only fails the relay. A provider that is
