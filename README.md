@@ -21,7 +21,7 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-catalog-api`, `csp-infra-redis`, `csp-api-gateway`). A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-catalog-api`, `csp-infra-redis`, `csp-infra-rabbitmq`, `csp-api-gateway`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
@@ -211,6 +211,26 @@ from `env/<environment>.env.example`) before running `./scripts/up.sh`: the Redi
 ```bash
 ./scripts/up.sh dev
 ```
+
+## The RabbitMQ broker
+
+The single RabbitMQ instance of the environment (ADR-036) is defined in `csp-infra-rabbitmq`, which has its own `compose.yml`;
+`csp-infra-rabbitmq` must be cloned as a sibling of this repository. This repository includes it, so one `up.sh` also starts the
+broker on the `platform` network, and services reach `rabbitmq:5672` by name. The broker is not published to the host: it creates
+the exchanges `cine.events` and `cine.dlx` and one login per service, and no queues (each consumer declares its own at start-up).
+Its variables live in the same `env/<environment>.env`: `RABBIT_ADMIN_PASSWORD`, `WORKER_RELAY_PASSWORD`,
+`TICKETING_FULFILLMENT_PASSWORD` and `CONCESSIONS_PASSWORD` (URL-safe: `openssl rand -hex 24`), and `RELAY_AMQP_URL`, the URL
+with the login `worker_relay` that `csp-worker` uses to publish. The broker does not start while one of the four passwords is
+empty. In qa and main the passwords are injected as environment secrets.
+
+**An environment that already exists** has an env file created before the broker, so add the block "The single RabbitMQ broker"
+from `env/<environment>.env.example` to it before running `./scripts/up.sh`: the composition fails with `set <NAME>` otherwise.
+
+**The relay of the auth events stays off.** `AUTH_OUTBOX_RELAY_ENABLED=false` in the examples. Turn it on only when this
+composition also runs `csp-ticketing-api`, which declares the queues of the auth events (`cine.ticketing_fulfillment.user-registered`
+and `cine.ticketing_fulfillment.user-email-changed`, with their `.dlq`). The order is: broker healthy, Ticketing migrated and running,
+and then the relay. An event relayed before the queues exist is an unroutable permanent failure; how to replay it is in the README
+of `csp-worker`.
 
 ## The API gateway
 
