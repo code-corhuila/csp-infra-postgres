@@ -9,6 +9,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- `APP_AUTH_REGISTRATION_CONFIRM_URL` in `env/dev.env.example` (`http://localhost:4200/auth/confirm-registration`), `env/qa.env.example` and `env/main.env.example` (empty, to be set to the
+  address of the shell of the environment followed by `/auth/confirm-registration`), with a paragraph in the README: since `csp-auth-api` records a registration request and creates
+  the account when the owner opens the link (code-corhuila/csp-docs#282, ADR-062), an environment without it cannot confirm any registration. An existing environment copies the
+  variable before the next `./scripts/up.sh`.
 - Composition of the RabbitMQ broker: `include` of `csp-infra-rabbitmq` in `compose.yml` (the service `rabbitmq` on the `platform` network, not published), the
   passwords of its logins (`RABBIT_ADMIN_PASSWORD`, `WORKER_RELAY_PASSWORD`, `TICKETING_FULFILLMENT_PASSWORD`, `CONCESSIONS_PASSWORD`) and `RELAY_AMQP_URL`
   in the three `env/*.env.example` files, and a README section with the start-up order. `AUTH_OUTBOX_RELAY_ENABLED` is listed as `false` until the consumers of
