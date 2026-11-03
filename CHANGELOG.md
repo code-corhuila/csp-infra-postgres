@@ -7,6 +7,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- Composition of the RabbitMQ broker: `include` of `csp-infra-rabbitmq` in `compose.yml` (the service `rabbitmq` on the `platform` network, not published), the
+  passwords of its logins (`RABBIT_ADMIN_PASSWORD`, `WORKER_RELAY_PASSWORD`, `TICKETING_FULFILLMENT_PASSWORD`, `CONCESSIONS_PASSWORD`) and `RELAY_AMQP_URL`
+  in the three `env/*.env.example` files, and a README section with the start-up order. `AUTH_OUTBOX_RELAY_ENABLED` is listed as `false` until the consumers of
+  Ticketing are composed. An environment created before this change has to copy the new block into its env file.
 - `APP_AUTH_PASSWORD_RESET_URL` in `env/dev.env.example` (`http://localhost:4200/auth/reset-password`), `env/qa.env.example` and `env/main.env.example` (empty, to be set to the
   address of the shell of the environment followed by `/auth/reset-password`), with a paragraph in the README: `csp-auth-api` reads it to enable the password reset
   routes (ADR-050), and an environment copied from the examples without it answered `404` on `POST /forgot-password` and `POST /reset-password`. Found when running the
