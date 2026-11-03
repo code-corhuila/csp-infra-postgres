@@ -9,6 +9,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- `APP_AUTH_PASSWORD_RESET_URL` in `env/dev.env.example` (`http://localhost:4200/auth/reset-password`), `env/qa.env.example` and `env/main.env.example` (empty, to be set to the
+  address of the shell of the environment followed by `/auth/reset-password`), with a paragraph in the README: `csp-auth-api` reads it to enable the password reset
+  routes (ADR-050), and an environment copied from the examples without it answered `404` on `POST /forgot-password` and `POST /reset-password`. Found when running the
+  `release/3.0.0` branches together. Refs code-corhuila/csp-docs#186.
 - Prometheus scrapes `csp-auth-api` (`auth-api:8081`, `/metrics`) and loads the rule `AuthCredentialsLatencyP95AboveSlo`
   (`observability/alerts/auth-latency.yml`, mounted read-only in `compose.yml`): p95 of login or register above 1 second for 15 minutes, with a guard
   of at least 10 requests in those 15 minutes. It has promtool unit tests and a README section; no Alertmanager route exists yet, so it only shows in
