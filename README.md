@@ -163,6 +163,10 @@ example points to the Mailpit catcher of `csp-auth-api` (`docker compose --profi
 values are injected as environment secrets and the example files only carry the empty placeholders; the real env files are never
 versioned. An existing environment copies the block from `env/<environment>.env.example` before the next `./scripts/up.sh`.
 
+The password reset needs one more variable, `APP_AUTH_PASSWORD_RESET_URL` (ADR-050): the page of the auth portal that the link of the mail opens, as the
+browser reaches it (the address of the shell followed by `/auth/reset-password`, without a fragment; the example of development already carries it). It is not a secret.
+Without it, or without the SMTP host, `POST /forgot-password` and `POST /reset-password` answer `404`, so an environment created from an older example has to add it.
+
 **Real provider in development, with an expired key that does not break anything.** The service keeps pointing at Mailpit
 (`APP_AUTH_SMTP_HOST=mailpit`, port `1025`, `APP_AUTH_SMTP_TLS=none`) and Mailpit relays the messages to a real SMTP provider, so every
 message is shown at `http://localhost:8025`. Set `APP_AUTH_SMTP_TIMEOUT=15s` (the default, 5 s, is shorter than the handshake with the
