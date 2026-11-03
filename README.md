@@ -163,6 +163,11 @@ example points to the Mailpit catcher of `csp-auth-api` (`docker compose --profi
 values are injected as environment secrets and the example files only carry the empty placeholders; the real env files are never
 versioned. An existing environment copies the block from `env/<environment>.env.example` before the next `./scripts/up.sh`.
 
+The registration needs `APP_AUTH_REGISTRATION_CONFIRM_URL` (ADR-062): the page of the auth portal that the confirmation link opens (the address of the shell followed by
+`/auth/confirm-registration`, without a fragment; the example of development already carries it). It is not a secret. `POST /register` creates no account: it mails that
+link, so without the variable, or without the SMTP host, nobody can finish registering (the route still answers as usual and the service logs a `WARN`), and an environment
+created from an older example has to add it.
+
 The password reset needs one more variable, `APP_AUTH_PASSWORD_RESET_URL` (ADR-050): the page of the auth portal that the link of the mail opens, as the
 browser reaches it (the address of the shell followed by `/auth/reset-password`, without a fragment; the example of development already carries it). It is not a secret.
 Without it, or without the SMTP host, `POST /forgot-password` and `POST /reset-password` answer `404`, so an environment created from an older example has to add it.
