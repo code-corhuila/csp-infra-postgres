@@ -9,6 +9,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- The metrics and the alerts of the outbox relay of `csp-worker` (ADR-014, `code-corhuila/csp-worker#25`): the service `postgres-exporter` reads `worker.outbox_relay_state` as `worker_outbox_relay_events`,
+  `worker_outbox_relay_pending_overdue_seconds` and `worker_outbox_relay_pending_max_attempts`; Prometheus scrapes it as `csp-worker-outbox` and loads `observability/alerts/worker-outbox-relay.yml`
+  (oldest pending event more than 5 minutes past its next attempt, any event failed for good, a pending event with 10 attempts, and the exporter down) with `promtool` tests. There is no `/metrics` in the worker
+  (Norma 5.7.1). Limits: no discovery time in the state table, so the age is the lateness of the next attempt, and no publish latency. No Alertmanager route yet.
 - The platform gives `csp-booking-api` its service-only settings (`code-corhuila/csp-infra-postgres#48`, `code-corhuila/csp-booking-api#69`): `WORKFLOW_SUBJECTS=csp-workflow`,
   `CATALOG_BASE_URL`, `CATALOG_SERVICE_TOKEN_FILE` and `CATALOG_SERVICE_TOKEN_HOST_FILE` in the three `env/*.env.example` files, `SERVICE_SUBJECTS` documented as shared with Booking,
   `./scripts/dev-keys.sh` writes `keys/booking-service.token` (sub `booking-service`) and the path of that file, `./scripts/up.sh` refuses to start without it, and a README paragraph.

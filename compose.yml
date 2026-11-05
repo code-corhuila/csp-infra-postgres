@@ -41,6 +41,26 @@ services:
     expose: ["5432"]
     networks: [platform]
 
+  # The metrics of the outbox relay of csp-worker (ADR-014): it reads schema worker only, as worker_app, and exports what
+  # observability/postgres-exporter-queries.yaml asks. Its own metrics are off; Prometheus scrapes it as csp-worker-outbox.
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    command:
+      - --extend.query-path=/etc/postgres-exporter/queries.yaml
+      - --disable-default-metrics
+      - --disable-settings-metrics
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${PG_DATABASE:?set PG_DATABASE}?sslmode=disable
+      DATA_SOURCE_USER: worker_app
+      DATA_SOURCE_PASS: ${WORKER_APP_PASSWORD:?set WORKER_APP_PASSWORD}
+    volumes:
+      - ./observability/postgres-exporter-queries.yaml:/etc/postgres-exporter/queries.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose: ["9187"]
+    networks: [platform]
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.108.0
     command: ["--config=/etc/otel/config.yaml"]
