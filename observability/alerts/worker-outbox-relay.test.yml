@@ -1,0 +1,113 @@
+# Unit tests of worker-outbox-relay.yml. Run with: promtool test rules observability/alerts/worker-outbox-relay.test.yml
+# Series are synthetic: one sample per minute.
+rule_files:
+  - worker-outbox-relay.yml
+
+evaluation_interval: 1m
+
+tests:
+  # (a) the oldest pending event of booking falls further behind each minute: silent below 5 minutes, firing once it is past
+  - interval: 1m
+    input_series:
+      - series: 'worker_outbox_relay_pending_overdue_seconds{source="booking"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: WorkerOutboxRelayOldestPendingAbove5m
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: WorkerOutboxRelayOldestPendingAbove5m
+        exp_alerts:
+          - exp_labels:
+              source: booking
+              severity: ticket
+              component: csp-worker
+            exp_annotations:
+              summary: the relay of booking has a pending event that is more than 5 minutes past its next attempt
+              runbook_url: https://github.com/code-corhuila/csp-worker#starting-the-relays-and-replaying-events-that-failed-for-good
+
+  # (b) a relay that runs keeps the lateness at zero or a few seconds: never fires
+  - interval: 1m
+    input_series:
+      - series: 'worker_outbox_relay_pending_overdue_seconds{source="booking"}'
+        values: '0 4 0 7 0 3 0 9 0 5 0 2 0 6 0 1 0 8 0 4 0'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: WorkerOutboxRelayOldestPendingAbove5m
+        exp_alerts: []
+
+  # (c) one event of auth failed for good and one of booking failed after its attempts: both sources fire; published and pending events do not
+  - interval: 1m
+    input_series:
+      - series: 'worker_outbox_relay_events{source="auth",status="FAILED_PERMANENT"}'
+        values: '1x10'
+      - series: 'worker_outbox_relay_events{source="booking",status="FAILED_EXHAUSTED"}'
+        values: '2x10'
+      - series: 'worker_outbox_relay_events{source="concessions",status="PUBLISHED"}'
+        values: '500x10'
+      - series: 'worker_outbox_relay_events{source="ticketing_fulfillment",status="PENDING"}'
+        values: '30x10'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: WorkerOutboxRelayEventFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: WorkerOutboxRelayEventFailed
+        exp_alerts:
+          - exp_labels:
+              source: auth
+              severity: ticket
+              component: csp-worker
+            exp_annotations:
+              summary: the relay of auth has events that failed for good and wait for an operator
+              runbook_url: https://github.com/code-corhuila/csp-worker#starting-the-relays-and-replaying-events-that-failed-for-good
+          - exp_labels:
+              source: booking
+              severity: ticket
+              component: csp-worker
+            exp_annotations:
+              summary: the relay of booking has events that failed for good and wait for an operator
+              runbook_url: https://github.com/code-corhuila/csp-worker#starting-the-relays-and-replaying-events-that-failed-for-good
+
+  # (d) a pending event with 9 attempts is silent; with 10 it fires
+  - interval: 1m
+    input_series:
+      - series: 'worker_outbox_relay_pending_max_attempts{source="booking"}'
+        values: '9x10 10x10'
+      - series: 'worker_outbox_relay_pending_max_attempts{source="auth"}'
+        values: '3x20'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: WorkerOutboxRelayPendingEventRetrying
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: WorkerOutboxRelayPendingEventRetrying
+        exp_alerts:
+          - exp_labels:
+              source: booking
+              severity: ticket
+              component: csp-worker
+            exp_annotations:
+              summary: the relay of booking has a pending event with 10 attempts or more
+              runbook_url: https://github.com/code-corhuila/csp-worker#starting-the-relays-and-replaying-events-that-failed-for-good
+
+  # (e) the exporter does not answer for more than 5 minutes: the alert says that the others are blind
+  - interval: 1m
+    input_series:
+      - series: 'up{job="csp-worker-outbox",instance="postgres-exporter:9187"}'
+        values: '1x3 0x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: WorkerOutboxMetricsDown
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: WorkerOutboxMetricsDown
+        exp_alerts:
+          - exp_labels:
+              job: csp-worker-outbox
+              instance: postgres-exporter:9187
+              severity: ticket
+              component: csp-worker
+            exp_annotations:
+              summary: the exporter of the outbox relay metrics does not answer, so the alerts of the relay are blind
+              runbook_url: https://github.com/code-corhuila/csp-infra-postgres#the-outbox-relay-metrics-and-alerts-of-csp-worker
