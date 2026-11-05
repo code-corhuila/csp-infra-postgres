@@ -16,6 +16,9 @@ if [ -n "$token" ]; then
   while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
   printf '%s' "$payload" | base64 -d 2>/dev/null | grep -Eq '"sub" *: *"csp-worker"' || { echo "SERVICE_TOKEN is not a token whose sub is csp-worker: run ./scripts/dev-keys.sh (dev only)"; exit 1; }
 fi
+# csp-booking-api presents this file to Catalog: without it the seat map and the hold answer 503.
+catalog_token_file=$(grep '^CATALOG_SERVICE_TOKEN_HOST_FILE=' "$env_file" | cut -d= -f2-) || true
+[ -n "$catalog_token_file" ] && [ -s "$catalog_token_file" ] || { echo "CATALOG_SERVICE_TOKEN_HOST_FILE is empty or points to a missing or empty file in $env_file: it must hold the credential of booking-service for Catalog; run ./scripts/dev-keys.sh (dev only)"; exit 1; }
 grep -q '^MONGO_KEYFILE=.' "$env_file" || { echo "MONGO_KEYFILE is empty in $env_file: openssl rand -base64 48 | tr -d '[:space:]'"; exit 1; }
 docker network inspect platform >/dev/null 2>&1 || docker network create platform
 docker compose --env-file "$env_file" up -d --build
