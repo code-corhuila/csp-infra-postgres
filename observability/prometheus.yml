@@ -3,6 +3,7 @@ global:
 
 rule_files:
   - /etc/prometheus/alerts/auth-latency.yml
+  - /etc/prometheus/alerts/worker-outbox-relay.yml
 
 scrape_configs:
   - job_name: otel-collector
@@ -12,3 +13,7 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["auth-api:8081"]
+  # The state of the outbox relay of csp-worker, read from worker.outbox_relay_state (ADR-014).
+  - job_name: csp-worker-outbox
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
