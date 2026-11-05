@@ -7,6 +7,11 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- The platform gives `csp-booking-api` its service-only settings (`code-corhuila/csp-infra-postgres#48`, `code-corhuila/csp-booking-api#69`): `WORKFLOW_SUBJECTS=csp-workflow`,
+  `CATALOG_BASE_URL`, `CATALOG_SERVICE_TOKEN_FILE` and `CATALOG_SERVICE_TOKEN_HOST_FILE` in the three `env/*.env.example` files, `SERVICE_SUBJECTS` documented as shared with Booking,
+  `./scripts/dev-keys.sh` writes `keys/booking-service.token` (sub `booking-service`) and the path of that file, `./scripts/up.sh` refuses to start without it, and a README paragraph.
+  Requires the compose of `csp-booking-api` that passes `SERVICE_SUBJECTS` and `WORKFLOW_SUBJECTS` (`code-corhuila/csp-booking-api#75`). An environment created before this change has
+  to copy the new block into its env file.
 - `APP_AUTH_REGISTRATION_CONFIRM_URL` in `env/dev.env.example` (`http://localhost:4200/auth/confirm-registration`), `env/qa.env.example` and `env/main.env.example` (empty, to be set to the
   address of the shell of the environment followed by `/auth/confirm-registration`), with a paragraph in the README: since `csp-auth-api` records a registration request and creates
   the account when the owner opens the link (code-corhuila/csp-docs#282, ADR-062), an environment without it cannot confirm any registration. An existing environment copies the
@@ -28,6 +33,9 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
   stores every message and also relays the matching ones to a real SMTP provider, so an expired key only fails the relay. A provider that is
   unreachable or slow keeps Mailpit waiting inside the SMTP session and the synchronous email change answers `500`, while the password reset is
   not affected (measured, table in the README). README section and variables in `env/dev.env.example`.
+- Composition of the catalog: `include` of `csp-catalog-db` and `csp-catalog-api` in `compose.yml` (the service `catalog-api` on port `8082`, not
+  published), and a README section (sibling checkout, `CATALOG_APP_PASSWORD`, the optional `CATALOG_SERVICE_SUBJECTS`, migrate before starting).
+  `csp-infra-mongo` already includes the executor of `csp-catalog-db`, so that include is declared twice with the same file.
 
 ### Changed
 
@@ -41,9 +49,6 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
-- Composition of the catalog: `include` of `csp-catalog-db` and `csp-catalog-api` in `compose.yml` (the service `catalog-api` on port `8082`, not
-  published), and a README section (sibling checkout, `CATALOG_APP_PASSWORD`, the optional `CATALOG_SERVICE_SUBJECTS`, migrate before starting).
-  `csp-infra-mongo` already includes the executor of `csp-catalog-db`, so that include is declared twice with the same file.
 - The SMTP relay of `csp-auth-api` in the three `env/*.env.example` files (`APP_AUTH_SMTP_*`: the Mailpit catcher in development, empty
   placeholders for the secrets of qa and main) and a README section, so the platform passes them to the email change of HU-AUTH-004 (ADR-034).
 - README: the steps of an existing environment to switch to the migrators, in the order that was rehearsed (code-corhuila/csp-infra-postgres#20): back up first
