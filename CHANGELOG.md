@@ -9,6 +9,11 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- The platform gives `csp-booking-api` its service-only settings (`code-corhuila/csp-infra-postgres#48`, `code-corhuila/csp-booking-api#69`): `WORKFLOW_SUBJECTS=csp-workflow`,
+  `CATALOG_BASE_URL`, `CATALOG_SERVICE_TOKEN_FILE` and `CATALOG_SERVICE_TOKEN_HOST_FILE` in the three `env/*.env.example` files, `SERVICE_SUBJECTS` documented as shared with Booking,
+  `./scripts/dev-keys.sh` writes `keys/booking-service.token` (sub `booking-service`) and the path of that file, `./scripts/up.sh` refuses to start without it, and a README paragraph.
+  Requires the compose of `csp-booking-api` that passes `SERVICE_SUBJECTS` and `WORKFLOW_SUBJECTS` (`code-corhuila/csp-booking-api#75`). An environment created before this change has
+  to copy the new block into its env file.
 - `APP_AUTH_REGISTRATION_CONFIRM_URL` in `env/dev.env.example` (`http://localhost:4200/auth/confirm-registration`), `env/qa.env.example` and `env/main.env.example` (empty, to be set to the
   address of the shell of the environment followed by `/auth/confirm-registration`), with a paragraph in the README: since `csp-auth-api` records a registration request and creates
   the account when the owner opens the link (code-corhuila/csp-docs#282, ADR-062), an environment without it cannot confirm any registration. An existing environment copies the
@@ -33,6 +38,19 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 - Composition of the catalog: `include` of `csp-catalog-db` and `csp-catalog-api` in `compose.yml` (the service `catalog-api` on port `8082`, not
   published), and a README section (sibling checkout, `CATALOG_APP_PASSWORD`, the optional `CATALOG_SERVICE_SUBJECTS`, migrate before starting).
   `csp-infra-mongo` already includes the executor of `csp-catalog-db`, so that include is declared twice with the same file.
+
+### Changed
+
+- `scripts/dev-token.sh` adds `iss` `csp-auth` and `aud` `csp-internal` to the `sub`, `iat` and `exp` it already wrote (ADR-056), so the development
+  service credentials carry the claims that `csp-auth-api` requires. `scripts/dev-keys.sh` gets them through it.
+- qa: `PURGE_AUTH_ENABLED` is `true` in `env/qa.env.example`. The service token of `csp-worker` is loaded as an environment secret of qa (ADR-030, ADR-020); `main` stays `false` until it has its own key pair.
+- The three `env/*.env.example` files follow the catalog migrator of `csp-infra-mongo` (code-corhuila/csp-infra-mongo#9): `CATALOG_DB_USER=catalog_migrator`
+  (the owner of `catalog_db`, used by the executor of `csp-catalog-db`) and the new `CATALOG_APP_PASSWORD` of `catalog_app`, the login of
+  `csp-catalog-api`, which has no role of its own until `csp-catalog-db` grants `catalog_writer`. Without the variable the Mongo compose
+  refuses to start. An existing environment switches by hand, in the order of the README of `csp-infra-mongo`.
+
+### Added
+
 - The SMTP relay of `csp-auth-api` in the three `env/*.env.example` files (`APP_AUTH_SMTP_*`: the Mailpit catcher in development, empty
   placeholders for the secrets of qa and main) and a README section, so the platform passes them to the email change of HU-AUTH-004 (ADR-034).
 - README: the steps of an existing environment to switch to the migrators, in the order that was rehearsed (code-corhuila/csp-infra-postgres#20): back up first

@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 # DEVELOPMENT ONLY. Generates an RS256 key pair in keys/ (git-ignored) and writes
 # into env/dev.env the public key every service validates with, plus a service token
-# for csp-worker (its sub must be csp-worker: csp-booking-api only lets that subject call its internal operations).
+# for csp-worker (its sub must be csp-worker: csp-booking-api only lets that subject call its maintenance operations), and the
+# credential of csp-booking-api for Catalog (keys/booking-service.token, sub booking-service) with the absolute path of that file.
 # The same pair signs (the private key, APP_AUTH_JWT_PRIVATE_KEY of csp-auth-api) and validates (the public key, the
 # other services). qa and main use the identity service's keys, injected as secrets — never these.
 set -eu
@@ -14,12 +15,16 @@ openssl pkey -in keys/jwt-private.pem -pubout -out keys/jwt-public.pem
 public_key=$(awk '{ printf "%s\\n", $0 }' keys/jwt-public.pem)
 private_key=$(awk '{ printf "%s\\n", $0 }' keys/jwt-private.pem)
 service_token=$(./scripts/dev-token.sh csp-worker 1440)
+./scripts/dev-token.sh booking-service 1440 > keys/booking-service.token
+# The path compose mounts: absolute, and in the form Docker Desktop reads on Windows (pwd -W under Git Bash).
+catalog_token_file="$(cd keys && { pwd -W 2>/dev/null || pwd; })/booking-service.token"
 
 env_file=env/dev.env
 [ -f "$env_file" ] || cp env/dev.env.example "$env_file"
-grep -v -e '^JWT_PUBLIC_KEY=' -e '^SERVICE_TOKEN=' -e '^APP_AUTH_JWT_PRIVATE_KEY=' "$env_file" > "$env_file.tmp" || true
+grep -v -e '^JWT_PUBLIC_KEY=' -e '^SERVICE_TOKEN=' -e '^APP_AUTH_JWT_PRIVATE_KEY=' -e '^CATALOG_SERVICE_TOKEN_HOST_FILE=' "$env_file" > "$env_file.tmp" || true
 printf 'JWT_PUBLIC_KEY="%s"\n' "$public_key" >> "$env_file.tmp"
 printf 'SERVICE_TOKEN=%s\n' "$service_token" >> "$env_file.tmp"
 printf 'APP_AUTH_JWT_PRIVATE_KEY="%s"\n' "$private_key" >> "$env_file.tmp"
+printf 'CATALOG_SERVICE_TOKEN_HOST_FILE=%s\n' "$catalog_token_file" >> "$env_file.tmp"
 mv "$env_file.tmp" "$env_file"
 echo "keys/ and $env_file updated. A user token: ./scripts/dev-token.sh <subject> [minutes]"

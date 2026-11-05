@@ -46,6 +46,14 @@ the `postgres` container and runs the init script once by hand (see "An existing
 moves the schema, its tables and the control table to `booking_migrator` (and the same for `auth_migrator`), and then
 `BOOKING_DB_USER`, `BOOKING_DB_PASSWORD`, `AUTH_DB_USER` and `AUTH_DB_PASSWORD` point to them.
 
+**Service-only side of `csp-booking-api`.** The platform gives Booking three things besides its database. `SERVICE_SUBJECTS` (`csp-worker`) lets the worker call
+the maintenance operations; `WORKFLOW_SUBJECTS` (`csp-workflow`) lets the workflow service call `/internal/workflow/`, and empty keeps that family closed; a
+subject of one list gets `403` on the other family (ADR-035). `CATALOG_BASE_URL` points to Catalog inside the platform network and
+`CATALOG_SERVICE_TOKEN_HOST_FILE` is the absolute path of the file that holds the credential of `booking-service` (`iss` `csp-auth`, `aud` `csp-internal`, ADR-056): compose
+mounts it read-only at `CATALOG_SERVICE_TOKEN_FILE` and the service re-reads it every 30 s. In develop `./scripts/dev-keys.sh` writes it (`keys/booking-service.token`) and fills in
+the path; in qa and main the identity service issues it as the secret `CATALOG_SERVICE_TOKEN` and the deployment writes its value to a file. `./scripts/up.sh` refuses to start
+without that file. **An environment that already exists** copies the new block of its `env/*.env.example` (the four variables above) before the next `./scripts/up.sh`.
+
 Until the schema is migrated, `GET /health/ready` of the booking service answers `503` and the worker logs the
 failed sweep with its correlation id; the next sweep works. Then `csp-worker` calls the expiration operation of
 `csp-booking-api` every minute with its service token.
