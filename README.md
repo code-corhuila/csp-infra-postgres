@@ -262,8 +262,8 @@ its development default, which allows only `localhost` origins.
 
 ## Prometheus: what it scrapes and the latency alert
 
-`observability/prometheus.yml` has two scrape jobs: `otel-collector` (`otel-collector:8889`) and `csp-auth-api`
-(`auth-api:8081`, path `/metrics`, on the `platform` network). `csp-auth-api` exports `auth_http_requests_total{route,method,outcome}` and
+`observability/prometheus.yml` has three scrape jobs: `otel-collector` (`otel-collector:8889`), `csp-auth-api`
+(`auth-api:8081`, path `/metrics`, on the `platform` network) and `csp-worker-outbox` (see the next section). `csp-auth-api` exports `auth_http_requests_total{route,method,outcome}` and
 `auth_http_request_duration_seconds{route,method}` (buckets 0.05, 0.1, 0.25, 0.5, 1 and 2.5 seconds). Those series exist only once a
 `csp-auth-api` that serves `/metrics` is deployed; until then the target shows as down in Prometheus and the alert has no data.
 
@@ -281,6 +281,38 @@ of `compose.yml` (no local installation):
 docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 check rules alerts/auth-latency.yml
 docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 test rules alerts/auth-latency.test.yml
 docker run --rm --entrypoint promtool -v "$PWD/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro" -v "$PWD/observability/alerts:/etc/prometheus/alerts:ro" prom/prometheus:v2.54.1 check config /etc/prometheus/prometheus.yml
+```
+
+## The outbox relay metrics and alerts of csp-worker
+
+ADR-014 asks for metrics and alerts of the outbox relay. `csp-worker` exposes no `/metrics` (Norma 5.7.1 admits only its health point, see its README), so the
+metrics come from the state table of the relay: the service `postgres-exporter` of `compose.yml` connects as `worker_app` (owner of schema `worker`, no privilege on
+the other schemas) and runs the two queries of `observability/postgres-exporter-queries.yaml`; its own default metrics are off. Prometheus scrapes it as the job
+`csp-worker-outbox` (`postgres-exporter:9187`). It needs schema `worker` to exist (`worker-db-migrate` of `csp-worker`, before the relays are turned on); until then the
+queries fail and the series do not exist. It reads no password besides `WORKER_APP_PASSWORD`, which goes in separate variables, so it needs no URL-safe value.
+
+| Series | Labels | Meaning |
+|---|---|---|
+| `worker_outbox_relay_events` | `source`, `status` | Events of the outbox (`booking`, `auth`, `concessions`, `ticketing_fulfillment`) in each status: `PENDING`, `PUBLISHED`, `FAILED_PERMANENT`, `FAILED_EXHAUSTED` |
+| `worker_outbox_relay_pending_overdue_seconds` | `source` | Seconds that the oldest pending event is past its next attempt; `0` when none is due |
+| `worker_outbox_relay_pending_max_attempts` | `source` | Largest number of attempts of a pending event |
+
+`observability/alerts/worker-outbox-relay.yml` holds the three alerts of ADR-014, all with severity `ticket` and `component: csp-worker`, and a fourth that is not in the ADR:
+
+- `WorkerOutboxRelayOldestPendingAbove5m`: a pending event is more than 5 minutes past its next attempt for 1 minute, which means a relay that stopped or stalled.
+- `WorkerOutboxRelayEventFailed`: any event in `FAILED_PERMANENT` or `FAILED_EXHAUSTED`; it waits for an operator and the replay is in the README of `csp-worker`.
+- `WorkerOutboxRelayPendingEventRetrying`: a pending event with 10 attempts or more. Published events keep the attempts they took, so counting them would keep the alert on for ever.
+- `WorkerOutboxMetricsDown`: the exporter does not answer for 5 minutes, so the other three are blind.
+
+**Two limits.** The state table has no discovery time, so "the age of the oldest pending event" is how late its next attempt is: an event that waits for a retry is not old, and a relay that
+runs keeps it at zero. And the publish latency that ADR-014 lists cannot be read from this table, because the creation time of an event lives in the outbox of its domain, which the worker only reads.
+There is still **no Alertmanager route**: the alerts are visible in Prometheus and nothing notifies anyone.
+
+The rules have unit tests (`observability/alerts/worker-outbox-relay.test.yml`), run like the ones above:
+
+```bash
+docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 check rules alerts/worker-outbox-relay.yml
+docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 test rules alerts/worker-outbox-relay.test.yml
 ```
 
 ## One environment, one project, one volume
