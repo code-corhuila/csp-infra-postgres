@@ -7,6 +7,11 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- The platform gives `csp-booking-api` its service-only settings (`code-corhuila/csp-infra-postgres#48`, `code-corhuila/csp-booking-api#69`): `WORKFLOW_SUBJECTS=csp-workflow`,
+  `CATALOG_BASE_URL`, `CATALOG_SERVICE_TOKEN_FILE` and `CATALOG_SERVICE_TOKEN_HOST_FILE` in the three `env/*.env.example` files, `SERVICE_SUBJECTS` documented as shared with Booking,
+  `./scripts/dev-keys.sh` writes `keys/booking-service.token` (sub `booking-service`) and the path of that file, `./scripts/up.sh` refuses to start without it, and a README paragraph.
+  Requires the compose of `csp-booking-api` that passes `SERVICE_SUBJECTS` and `WORKFLOW_SUBJECTS` (`code-corhuila/csp-booking-api#75`). An environment created before this change has
+  to copy the new block into its env file.
 - `APP_AUTH_REGISTRATION_CONFIRM_URL` in `env/dev.env.example` (`http://localhost:4200/auth/confirm-registration`), `env/qa.env.example` and `env/main.env.example` (empty, to be set to the
   address of the shell of the environment followed by `/auth/confirm-registration`), with a paragraph in the README: since `csp-auth-api` records a registration request and creates
   the account when the owner opens the link (code-corhuila/csp-docs#282, ADR-062), an environment without it cannot confirm any registration. An existing environment copies the
