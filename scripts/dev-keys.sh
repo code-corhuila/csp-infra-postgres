@@ -30,4 +30,5 @@ printf 'WORKFLOW_SERVICE_TOKEN=%s\n' "$workflow_token" >> "$env_file.tmp"
 printf 'APP_AUTH_JWT_PRIVATE_KEY="%s"\n' "$private_key" >> "$env_file.tmp"
 printf 'CATALOG_SERVICE_TOKEN_HOST_FILE=%s\n' "$catalog_token_file" >> "$env_file.tmp"
 mv "$env_file.tmp" "$env_file"
+./scripts/internal-ca.sh dev
 echo "keys/ and $env_file updated. A user token: ./scripts/dev-token.sh <subject> [minutes]"
