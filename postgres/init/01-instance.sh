@@ -16,9 +16,11 @@ set -e
 # already ran the migrations as the administrator: the schema, its tables and the control table pass to the migrator,
 # and it gets the admin option on the roles the administrator created, so the next migrations can still grant them.
 # Sequences owned by a column follow their table.
+# The optional third argument is the prefix of the logins and roles when it differs from the schema name (Ticketing: schema
+# ticketing_fulfillment, ticketing_migrator, ticketing_reader, ticketing_writer, ticketing_outbox_reader).
 migrator() {
   psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-    -v domain="$1" -v migrator="$1_migrator" -v migrator_password="$2" <<'SQL'
+    -v domain="$1" -v prefix="${3:-$1}" -v migrator="${3:-$1}_migrator" -v migrator_password="$2" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN CREATEROLE PASSWORD %L', :'migrator', :'migrator_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'migrator')\gexec
 SELECT format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', :'domain', :'migrator')\gexec
@@ -34,13 +36,13 @@ FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = :'domain' AND c.relkind IN ('r', 'p', 'v', 'm') AND pg_get_userbyid(c.relowner) <> :'migrator'\gexec
 SELECT format('GRANT %I TO %I WITH ADMIN OPTION', rolname, :'migrator') FROM pg_roles
-WHERE rolname IN (:'domain' || '_reader', :'domain' || '_writer', :'domain' || '_outbox_reader')\gexec
+WHERE rolname IN (:'prefix' || '_reader', :'prefix' || '_writer', :'prefix' || '_outbox_reader')\gexec
 SQL
 }
 
 psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
   -v booking_password="$BOOKING_APP_PASSWORD" -v auth_password="$AUTH_APP_PASSWORD" \
-  -v worker_password="$WORKER_APP_PASSWORD" -v workflow_password="$WORKFLOW_APP_PASSWORD" <<'SQL'
+  -v worker_password="$WORKER_APP_PASSWORD" -v workflow_password="$WORKFLOW_APP_PASSWORD" -v ticketing_password="$TICKETING_APP_PASSWORD" <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'booking_app', :'booking_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'booking_app')\gexec
@@ -50,11 +52,15 @@ SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'worker_app', :'worker_passwor
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'worker_app')\gexec
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'workflow_app', :'workflow_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'workflow_app')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'ticketing_app', :'ticketing_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ticketing_app')\gexec
 ALTER ROLE booking_app SET search_path = booking;
 ALTER ROLE auth_app SET search_path = auth;
 ALTER ROLE workflow_app SET search_path = workflow;
+ALTER ROLE ticketing_app SET search_path = ticketing_fulfillment;
 SQL
 
 migrator booking "$BOOKING_MIGRATOR_PASSWORD"
 migrator auth "$AUTH_MIGRATOR_PASSWORD"
 migrator workflow "$WORKFLOW_MIGRATOR_PASSWORD"
+migrator ticketing_fulfillment "$TICKETING_MIGRATOR_PASSWORD" ticketing
