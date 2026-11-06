@@ -15,6 +15,8 @@ env/<environment>.env.example    one file per environment: dev, qa, main (Annex 
 observability/                 OpenTelemetry collector, Prometheus, Grafana
 scripts/up.sh dev|qa|main     checks env/<environment>.env, creates the network and brings everything up
 scripts/down.sh
+scripts/internal-ca.sh          internal CA of one environment and the TLS certificate of Catalog in keys/tls/<env>/ (ADR-067)
+scripts/test-internal-ca.sh     checks of the script and of the TLS variables of the env examples (prints totals)
 scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY, SERVICE_TOKEN, WORKFLOW_SERVICE_TOKEN and APP_AUTH_JWT_PRIVATE_KEY in env/dev.env
 scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a subject, with `iss` csp-auth and `aud` csp-internal (ADR-056)
 ```
@@ -151,7 +153,7 @@ docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migr
 `csp-catalog-api` is included from `../csp-catalog-api/deploy/compose.yml`, so it must be cloned as a sibling of this
 repository (`csp-catalog-db`, whose executor `csp-infra-mongo` already includes, is also listed in `compose.yml`). The service
 is `catalog-api` on port `8082` of the `platform` network and is not published to the host: only the gateway reaches it, and
-Booking calls it by name with its service credential (`http://catalog-api:8082/api/v1/catalog`). It logs in to MongoDB as `catalog_app`, so
+Booking calls it by name with its service credential (`https://catalog-api:8082/api/v1/catalog`, ADR-067). It logs in to MongoDB as `catalog_app`, so
 `CATALOG_APP_PASSWORD` is required, and it validates tokens with the same `JWT_PUBLIC_KEY` as the other services. `SERVICE_SUBJECTS`
 of the platform belongs to `csp-worker`; the subjects the catalog accepts on its availability route come from the optional
 `CATALOG_SERVICE_SUBJECTS` (default `booking-service`). Run the migration executor before starting the service, so that
@@ -161,6 +163,42 @@ of the platform belongs to `csp-worker`; the subjects the catalog accepts on its
 docker compose --env-file env/dev.env --profile tooling run --rm catalog-db-migrate
 docker compose --env-file env/dev.env up -d --build catalog-api
 ```
+
+## TLS to the catalog API (ADR-067)
+
+`csp-catalog-api` answers HTTPS only. Every environment (`dev`, `qa`, `main`) has its own internal CA, `csp-internal-ca` (RSA 3072, 1 year), never
+shared, and Catalog has a certificate issued by it (RSA 2048, **90 days**) with the names `catalog-api` and `localhost`. The callers trust that CA and nothing
+else. One command creates both and writes the three host paths into `env/<environment>.env` (`dev-keys.sh` runs it for `dev`):
+
+```bash
+./scripts/internal-ca.sh dev|qa|main
+```
+
+It writes `keys/tls/<environment>/` (git-ignored): `ca.crt` (public), `catalog.crt` (the chain: certificate of Catalog, then the CA), `catalog.key`
+and `ca.key`. **`ca.key` never leaves that folder**: it is not mounted into any container and no repository holds it. `./scripts/up.sh` refuses to start
+when one of the three host files is missing.
+
+**Renewal every 90 days:** run the same command again before the certificate expires. The CA is kept while it has more than 30 days left (so the callers
+need no change) and a new certificate of Catalog is issued; the services re-read the files, so nothing restarts. When the CA is about to expire (1 year) the
+command creates a new one, and every service that mounts `ca.crt` is restarted. Check the dates with
+`openssl x509 -in keys/tls/<environment>/catalog.crt -noout -enddate`.
+
+The variables are the same in every repository. Inside the containers the files are always `/run/tls/catalog.crt`, `/run/tls/catalog.key` and
+`/run/tls/ca.crt` (`CATALOG_TLS_CERTIFICATE_FILE`, `CATALOG_TLS_PRIVATE_KEY_FILE`, `CATALOG_TLS_CA_FILE`); on the host they are the files named by
+`CATALOG_TLS_CERTIFICATE_HOST_FILE`, `CATALOG_TLS_PRIVATE_KEY_HOST_FILE` and `CATALOG_TLS_CA_HOST_FILE`. The compose files of the services live in their own
+repositories and must mount, read-only and in this order:
+
+1. `csp-catalog-api`: `CATALOG_TLS_CERTIFICATE_HOST_FILE` at `/run/tls/catalog.crt`, `CATALOG_TLS_PRIVATE_KEY_HOST_FILE` at `/run/tls/catalog.key`, and
+   `CATALOG_TLS_CA_HOST_FILE` at `/run/tls/ca.crt` (for its health check); it passes the three `CATALOG_TLS_*_FILE` variables.
+2. `csp-api-gateway`: `CATALOG_TLS_CA_HOST_FILE` at `/run/tls/ca.crt`, and `APP_GATEWAY_CATALOG_UPSTREAM` (`https://catalog-api:8082`).
+3. `csp-booking-api`: `CATALOG_TLS_CA_HOST_FILE` at `/run/tls/ca.crt`, `CATALOG_TLS_CA_FILE`, and `CATALOG_BASE_URL`
+   (`https://catalog-api:8082/api/v1/catalog`), which it refuses when it is not `https://`.
+
+Only the certificate and key mount into Catalog; the callers get only the public `ca.crt`. **An environment that already exists** copies the new block of
+its `env/*.env.example` (`CATALOG_BASE_URL`, the six `CATALOG_TLS_*` variables and `APP_GATEWAY_CATALOG_UPSTREAM`) and runs the command before the next
+`./scripts/up.sh`. Check the script and the variables with `./scripts/test-internal-ca.sh` (it prints the totals): it generates the three environments in a
+temporary folder and verifies the chain, the two names, the 90 days and 1 year, that a certificate of one environment is rejected by the CA of another, and the
+`https://` values of the env examples.
 
 ## The SMTP relay of the identity service
 
