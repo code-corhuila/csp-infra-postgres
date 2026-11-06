@@ -283,6 +283,21 @@ and `cine.ticketing_fulfillment.user-email-changed`, with their `.dlq`). The ord
 and then the relay. An event relayed before the queues exist is an unroutable permanent failure; how to replay it is in the README
 of `csp-worker`.
 
+## The ticketing service
+
+`csp-ticketing-api` issues and emails the tickets and keeps its state in schema `ticketing_fulfillment` of this PostgreSQL instance (ADR-017). The repositories `csp-ticketing-db` and `csp-ticketing-api` must be cloned as siblings of this one. The platform gives them three things.
+
+- **The database.** `postgres/init/01-instance.sh` creates the login `ticketing_app` (password `TICKETING_APP_PASSWORD`, `search_path` `ticketing_fulfillment`) and the migration executor `ticketing_migrator` (password `TICKETING_MIGRATOR_PASSWORD`), owner of the schema, with `CREATEROLE` and `CREATE` on the database. The schema is `ticketing_fulfillment` but the roles are `ticketing_*` (`ticketing_reader`, `ticketing_writer`, `ticketing_outbox_reader`), so `migrator()` takes the prefix as an optional third argument. The tooling service `ticketing-db-migrate` of `csp-ticketing-db` applies the migrations.
+- **The variables.** Every one is named `TICKETING_*` or `OBJECT_STORAGE_*`, because `SPRING_DATASOURCE_*` and `RABBITMQ_*` belong to other services in the file they share: `TICKETING_DB_USER` and `TICKETING_DB_PASSWORD` (the executor), `TICKETING_APP_USER` and `TICKETING_APP_PASSWORD` (the service), `TICKETING_FULFILLMENT_PASSWORD` (its broker login, already in the broker block), `OBJECT_STORAGE_ACCESS_KEY` and `OBJECT_STORAGE_SECRET_KEY` (the read-only account of the bucket of the PDFs; the service refuses to start without them) and `TICKETING_SMTP_*`. The service builds its AMQP connection from the login and the password, so `TICKETING_AMQP_URL` is not needed here.
+- **No object storage yet.** The platform does not compose an object storage, so the bucket `tickets` does not exist: the service starts and reports `objectStorage` down on `/health/ready`, and the download of a PDF answers `503`. The email provider is down too until a catcher runs (`docker compose --profile mail up mailpit` of `csp-auth-api`, or a real relay).
+
+```bash
+./scripts/up.sh dev
+docker compose --env-file env/dev.env --profile tooling run --rm ticketing-db-migrate
+```
+
+**An environment that already exists** keeps its PostgreSQL volume, so the init script does not run again: add the new block to the env file, then run `docker compose --env-file env/<environment>.env exec postgres sh /docker-entrypoint-initdb.d/01-instance.sh` once (every statement is idempotent) before the migration.
+
 ## The API gateway
 
 The API gateway (`csp-api-gateway`, NGINX) is included from `../csp-api-gateway/deploy/compose.yml`, so `csp-api-gateway` must be
