@@ -15,7 +15,7 @@ env/<environment>.env.example    one file per environment: dev, qa, main (Annex 
 observability/                 OpenTelemetry collector, Prometheus, Grafana
 scripts/up.sh dev|qa|main     checks env/<environment>.env, creates the network and brings everything up
 scripts/down.sh
-scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY, SERVICE_TOKEN and APP_AUTH_JWT_PRIVATE_KEY in env/dev.env
+scripts/dev-keys.sh            DEVELOPMENT ONLY: RS256 key pair in keys/ (git-ignored), JWT_PUBLIC_KEY, SERVICE_TOKEN, WORKFLOW_SERVICE_TOKEN and APP_AUTH_JWT_PRIVATE_KEY in env/dev.env
 scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a subject, with `iss` csp-auth and `aud` csp-internal (ADR-056)
 ```
 
@@ -31,7 +31,7 @@ sibling fails loudly on `up`: nothing is silently skipped.
 not start with `up`, it is run once per environment and again whenever a migration is added.
 
 ```bash
-cp env/dev.env.example env/dev.env  # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD, BOOKING_MIGRATOR_PASSWORD and WORKER_APP_PASSWORD
+cp env/dev.env.example env/dev.env  # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD, BOOKING_MIGRATOR_PASSWORD, WORKER_APP_PASSWORD, WORKFLOW_APP_PASSWORD and WORKFLOW_MIGRATOR_PASSWORD
 ./scripts/dev-keys.sh                 # dev only: JWT_PUBLIC_KEY and the SERVICE_TOKEN of csp-worker
 ./scripts/up.sh dev
 docker compose --env-file env/dev.env run --rm booking-db-migrate
@@ -281,6 +281,38 @@ of `compose.yml` (no local installation):
 docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 check rules alerts/auth-latency.yml
 docker run --rm --entrypoint promtool -v "$PWD/observability:/o:ro" -w /o prom/prometheus:v2.54.1 test rules alerts/auth-latency.test.yml
 docker run --rm --entrypoint promtool -v "$PWD/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro" -v "$PWD/observability/alerts:/etc/prometheus/alerts:ro" prom/prometheus:v2.54.1 check config /etc/prometheus/prometheus.yml
+```
+
+## The workflow service
+
+`csp-workflow` orchestrates the sagas that cross domains (Norma 5.8, ADR-066) and keeps their state in schema `workflow` of this PostgreSQL
+instance (ADR-065). The platform gives it four things.
+
+- **The database.** `postgres/init/01-instance.sh` creates the login `workflow_app` (password `WORKFLOW_APP_PASSWORD`, `search_path` `workflow`) and
+  the migration executor `workflow_migrator` (password `WORKFLOW_MIGRATOR_PASSWORD`), owner of the `workflow` schema, with `CREATEROLE` and `CREATE` on
+  the database, the same pattern as `booking_migrator` and `auth_migrator`. No `-db` repository owns this schema: its migrations live in `db/` of
+  `csp-workflow` and the tooling service `workflow-db-migrate` of that repository applies them. Migration `V003` creates `workflow_writer` and `V005` makes
+  `workflow_app` a member of it, so the login must exist **before** the migration runs: that is why the init script creates it.
+- **The variables.** Every one of this domain is named `WORKFLOW_*`, because `SERVICE_TOKEN` and `SPRING_DATASOURCE_*` belong to `csp-worker` and
+  `csp-booking-api` in the file the services share: `WORKFLOW_DB_USER` and `WORKFLOW_DB_PASSWORD` (the executor), `WORKFLOW_APP_USER` and
+  `WORKFLOW_APP_PASSWORD` (the service), and `WORKFLOW_SERVICE_TOKEN`.
+- **The credential for Booking.** `WORKFLOW_SERVICE_TOKEN` has `sub` `csp-workflow`, which `WORKFLOW_SUBJECTS=csp-workflow` (set for `csp-booking-api` above) lets
+  call `/internal/workflow/` and nothing else. In develop `./scripts/dev-keys.sh` writes it; in qa and main the identity service issues it and the deployment
+  injects it as a secret. `./scripts/up.sh` refuses to start without it and checks its subject, as it does for the token of `csp-worker`.
+- **The route.** The gateway sends `/api/v1/sagas` to `workflow:8086` (`APP_GATEWAY_WORKFLOW_UPSTREAM`); the service is not published to the host.
+
+```bash
+./scripts/dev-keys.sh                 # dev only: also WORKFLOW_SERVICE_TOKEN
+./scripts/up.sh dev
+docker compose --env-file env/dev.env --profile tooling run --rm workflow-db-migrate
+docker compose --env-file env/dev.env up -d workflow
+```
+
+The service refuses to start without its database, its public key or its token, so run the executor first. In an environment whose volume already exists, run
+the init script once by hand so the two logins appear (every statement is idempotent), as described in "An existing environment: switch to the migrators":
+
+```bash
+docker compose --env-file env/dev.env exec -T postgres sh /docker-entrypoint-initdb.d/01-instance.sh
 ```
 
 ## The outbox relay metrics and alerts of csp-worker

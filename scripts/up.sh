@@ -9,13 +9,20 @@ env_file="env/$environment.env"
 [ -f "$env_file" ] || { echo "missing $env_file: cp env/$environment.env.example $env_file"; exit 1; }
 grep -q '^JWT_PUBLIC_KEY=.' "$env_file" || { echo "JWT_PUBLIC_KEY is empty in $env_file: run ./scripts/dev-keys.sh (dev only)"; exit 1; }
 grep -Eq '^SERVICE_TOKEN=.|^SERVICE_TOKEN_FILE=.' "$env_file" || { echo "SERVICE_TOKEN (or SERVICE_TOKEN_FILE) is empty in $env_file: csp-worker would be refused by the booking service; run ./scripts/dev-keys.sh (dev only)"; exit 1; }
-# The booking service only lets the subject csp-worker call its internal operations: any other token is a 403.
-token=$(grep '^SERVICE_TOKEN=' "$env_file" | cut -d= -f2-) || true
-if [ -n "$token" ]; then
-  payload=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')
-  while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
-  printf '%s' "$payload" | base64 -d 2>/dev/null | grep -Eq '"sub" *: *"csp-worker"' || { echo "SERVICE_TOKEN is not a token whose sub is csp-worker: run ./scripts/dev-keys.sh (dev only)"; exit 1; }
-fi
+# The booking service only lets a subject call the internal operations of its own family: csp-worker the maintenance ones and
+# csp-workflow the ones of /internal/workflow/. Any other token is a 403.
+check_subject() {  # variable, subject
+  token=$(grep "^$1=" "$env_file" | cut -d= -f2-) || true
+  if [ -n "$token" ]; then
+    payload=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')
+    while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
+    printf '%s' "$payload" | base64 -d 2>/dev/null | grep -Eq "\"sub\" *: *\"$2\"" || { echo "$1 is not a token whose sub is $2: run ./scripts/dev-keys.sh (dev only)"; exit 1; }
+  fi
+}
+check_subject SERVICE_TOKEN csp-worker
+# csp-workflow presents this token to the booking service: without it the sagas cannot hold or confirm a reservation.
+grep -q '^WORKFLOW_SERVICE_TOKEN=.' "$env_file" || { echo "WORKFLOW_SERVICE_TOKEN is empty in $env_file: the booking service would refuse csp-workflow; run ./scripts/dev-keys.sh (dev only)"; exit 1; }
+check_subject WORKFLOW_SERVICE_TOKEN csp-workflow
 # csp-booking-api presents this file to Catalog: without it the seat map and the hold answer 503.
 catalog_token_file=$(grep '^CATALOG_SERVICE_TOKEN_HOST_FILE=' "$env_file" | cut -d= -f2-) || true
 [ -n "$catalog_token_file" ] && [ -s "$catalog_token_file" ] || { echo "CATALOG_SERVICE_TOKEN_HOST_FILE is empty or points to a missing or empty file in $env_file: it must hold the credential of booking-service for Catalog; run ./scripts/dev-keys.sh (dev only)"; exit 1; }
