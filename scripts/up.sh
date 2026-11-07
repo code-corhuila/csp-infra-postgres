@@ -37,11 +37,16 @@ for variable in RUSTFS_ROOT_USER RUSTFS_ROOT_PASSWORD TICKETING_PDF_WRITER_SECRE
 done
 grep -q '^MONGO_KEYFILE=.' "$env_file" || { echo "MONGO_KEYFILE is empty in $env_file: openssl rand -base64 48 | tr -d '[:space:]'"; exit 1; }
 docker network inspect platform >/dev/null 2>&1 || docker network create platform
-# csp-workflow keeps its state in schema workflow and stops when workflow.saga does not exist (issue #59). Its migration executor is
-# a tooling service that `up` never starts, so: PostgreSQL first (healthy = the real server, see compose.yml), then the migration,
-# then everything else. The migration is idempotent: with nothing pending it answers "No migration necessary".
+# Every service keeps its state in a schema that its migration executor creates, and the executors are tooling services that `up`
+# never starts (csp-workflow stops when workflow.saga does not exist, issue #59; the others start against missing or old schemas,
+# issue #63). So: PostgreSQL first (healthy = the real server, see compose.yml), then the executors, MongoDB and the
+# executor of Catalog, then everything else. Every migration is idempotent: with nothing pending it answers "No migration necessary".
 docker compose --env-file "$env_file" up -d --wait postgres
-docker compose --env-file "$env_file" --profile tooling run --rm -e FLYWAY_CONNECT_RETRIES=10 workflow-db-migrate
+for executor in booking-db-migrate auth-db-migrate ticketing-db-migrate worker-db-migrate workflow-db-migrate; do
+  docker compose --env-file "$env_file" --profile tooling run --rm -e FLYWAY_CONNECT_RETRIES=10 "$executor"
+done
+docker compose --env-file "$env_file" up -d --wait mongodb
+docker compose --env-file "$env_file" --profile tooling run --rm catalog-db-migrate
 docker compose --env-file "$env_file" up -d --build
 # Bucket, rules and the two accounts of the storage (idempotent, read from the standard input: it needs no mount).
 docker compose --env-file "$env_file" run --rm -T setup < ../csp-infra-rustfs/rustfs/setup.sh
