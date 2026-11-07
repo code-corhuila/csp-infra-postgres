@@ -346,6 +346,8 @@ docker compose --env-file env/dev.env --profile tooling run --rm workflow-db-mig
 docker compose --env-file env/dev.env up -d workflow
 ```
 
+`./scripts/up.sh` already does the first and third steps in the right order (issue #59): it starts PostgreSQL and waits until it is healthy, runs `workflow-db-migrate` (a tooling service that `up` never starts by itself), and only then brings up everything else, so the service never starts before `workflow.saga` exists and needs no restart. The healthcheck of PostgreSQL is a TCP check (`pg_isready -h 127.0.0.1`) because the temporary server of the first start listens on the socket only. `./scripts/test-start-order.sh` checks that order and prints totals. The explicit commands above remain for a manual run (for example, to apply a new migration without restarting the platform).
+
 The service refuses to start without its database, its public key or its token, so run the executor first. In an environment whose volume already exists, run
 the init script once by hand so the two logins appear (every statement is idempotent), as described in "An existing environment: switch to the migrators":
 

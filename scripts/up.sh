@@ -33,5 +33,10 @@ for variable in CATALOG_TLS_CERTIFICATE_HOST_FILE CATALOG_TLS_PRIVATE_KEY_HOST_F
 done
 grep -q '^MONGO_KEYFILE=.' "$env_file" || { echo "MONGO_KEYFILE is empty in $env_file: openssl rand -base64 48 | tr -d '[:space:]'"; exit 1; }
 docker network inspect platform >/dev/null 2>&1 || docker network create platform
+# csp-workflow keeps its state in schema workflow and stops when workflow.saga does not exist (issue #59). Its migration executor is
+# a tooling service that `up` never starts, so: PostgreSQL first (healthy = the real server, see compose.yml), then the migration,
+# then everything else. The migration is idempotent: with nothing pending it answers "No migration necessary".
+docker compose --env-file "$env_file" up -d --wait postgres
+docker compose --env-file "$env_file" --profile tooling run --rm -e FLYWAY_CONNECT_RETRIES=10 workflow-db-migrate
 docker compose --env-file "$env_file" up -d --build
 docker compose --env-file "$env_file" ps
