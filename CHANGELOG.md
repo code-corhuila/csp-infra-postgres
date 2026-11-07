@@ -9,6 +9,7 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Fixed
 
+- `./scripts/up.sh` runs the migration executor of every domain (code-corhuila/csp-infra-postgres#63, HU-TICKETING-002): `booking-db-migrate`, `auth-db-migrate`, `ticketing-db-migrate`, `worker-db-migrate` and `workflow-db-migrate` after PostgreSQL is healthy, and `catalog-db-migrate` after MongoDB is, all before `up -d --build`. Before this only the one of `csp-workflow` ran, and an environment brought up from scratch or after a pull that adds a migration started the services against missing or old schemas. Every migration is idempotent. `scripts/test-start-order.sh` checks the order.
 - `csp-workflow` no longer stops when it starts before its migration (code-corhuila/csp-infra-postgres#59): `workflow-db-migrate` is in the `tooling` profile, so `./scripts/up.sh` (`up -d --build` only) never ran it and the service started without `workflow.saga`. `up.sh` now runs `up -d --wait postgres`, then the migration with `FLYWAY_CONNECT_RETRIES=10`, then the full `up`. The healthcheck of `postgres` in `compose.yml` is now a TCP check (`pg_isready -h 127.0.0.1`), because on an empty volume the temporary init server listens on the socket only and the container could be healthy before the logins exist. `scripts/test-start-order.sh` checks the order and prints totals; the README says so. No change in `csp-workflow`.
 
 ### Added
