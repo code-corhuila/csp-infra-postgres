@@ -5,6 +5,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ## [Unreleased]
 
+### Fixed
+
+- `csp-workflow` no longer stops when it starts before its migration (code-corhuila/csp-infra-postgres#59): `workflow-db-migrate` is in the `tooling` profile, so `./scripts/up.sh` (`up -d --build` only) never ran it and the service started without `workflow.saga`. `up.sh` now runs `up -d --wait postgres`, then the migration with `FLYWAY_CONNECT_RETRIES=10`, then the full `up`. The healthcheck of `postgres` in `compose.yml` is now a TCP check (`pg_isready -h 127.0.0.1`), because on an empty volume the temporary init server listens on the socket only and the container could be healthy before the logins exist. `scripts/test-start-order.sh` checks the order and prints totals; the README says so. No change in `csp-workflow`.
+
 ### Added
 
 - The platform composes the object storage of the ticket PDFs and a mail catcher (code-corhuila/csp-infra-postgres#58, ADR-058): `compose.yml` includes `../csp-infra-rustfs/compose.yml` (RustFS on the `platform` network, bucket `tickets`, `ticketing_pdf_reader` for `csp-ticketing-api` and `ticketing_pdf_writer` for `csp-worker`); `scripts/up.sh` runs its idempotent setup job after `up` and refuses to start without the root account and the two secrets; the three `env/*.env.example` files list the storage block (names and placeholders only), set `OBJECT_STORAGE_ACCESS_KEY=ticketing_pdf_reader` and `OBJECT_STORAGE_SECRET_KEY=${TICKETING_PDF_READER_SECRET}`, and add `TICKETING_SMTP_AUTH` and `TICKETING_SMTP_STARTTLS` (`false` in development, `true` in qa and main). `env/dev.env.example` also sets `COMPOSE_PROFILES=mail`, so the Mailpit of `csp-auth-api` starts with the platform instead of being duplicated here. Requires the compose of `csp-ticketing-api` that reads the two SMTP flags (code-corhuila/csp-ticketing-api#71). An environment created before this change copies the new variables into its env file.
