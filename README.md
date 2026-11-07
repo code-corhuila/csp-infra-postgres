@@ -30,7 +30,9 @@ sibling fails loudly on `up`: nothing is silently skipped.
 
 `compose.yml` runs the single PostgreSQL instance of the environment (Annex J) and includes `csp-booking-db`,
 `csp-booking-api` and `csp-worker`. The migration executor of a `-db` repository is a tooling service: it does
-not start with `up`, it is run once per environment and again whenever a migration is added.
+not start with `up`, but `./scripts/up.sh` runs every executor (booking, auth, ticketing, worker, workflow and catalog) after the
+database is healthy and before the services start, so an environment brought up from scratch or after a pull that adds a migration
+is migrated. The migrations are idempotent; you can still run one executor by hand, as the commands below do.
 
 ```bash
 cp env/dev.env.example env/dev.env  # set PG_ADMIN_PASSWORD, BOOKING_APP_PASSWORD, BOOKING_MIGRATOR_PASSWORD, WORKER_APP_PASSWORD, WORKFLOW_APP_PASSWORD and WORKFLOW_MIGRATOR_PASSWORD
