@@ -279,11 +279,11 @@ empty. In qa and main the passwords are injected as environment secrets.
 **An environment that already exists** has an env file created before the broker, so add the block "The single RabbitMQ broker"
 from `env/<environment>.env.example` to it before running `./scripts/up.sh`: the composition fails with `set <NAME>` otherwise.
 
-**The relay of the auth events stays off.** `AUTH_OUTBOX_RELAY_ENABLED=false` in the examples. Turn it on only when this
-composition also runs `csp-ticketing-api`, which declares the queues of the auth events (`cine.ticketing_fulfillment.user-registered`
+**The relay of the auth events is enabled in the development example.** `AUTH_OUTBOX_RELAY_ENABLED=true` there because this
+composition runs `csp-ticketing-api`, which declares the queues of the auth events (`cine.ticketing_fulfillment.user-registered`
 and `cine.ticketing_fulfillment.user-email-changed`, with their `.dlq`). The order is: broker healthy, Ticketing migrated and running,
-and then the relay. An event relayed before the queues exist is an unroutable permanent failure; how to replay it is in the README
-of `csp-worker`.
+and then the relay. Keep the relay off in an environment until those queues exist. An event relayed before the queues exist is an
+unroutable permanent failure; how to replay it is in the README of `csp-worker`.
 
 ## The ticketing service
 
