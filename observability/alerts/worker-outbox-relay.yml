@@ -1,0 +1,49 @@
+# Alerts of the outbox relay of csp-worker (ADR-014, section Observability; code-corhuila/csp-worker#25). The series come from
+# observability/postgres-exporter-queries.yaml, which reads the state table worker.outbox_relay_state. The first three rules are the
+# three that ADR-014 lists; the fourth is not in the ADR: without it an exporter that is down would silence the others.
+#
+# "Oldest pending event older than 5 minutes" is measured as how late the next attempt of the oldest pending event is, because the state
+# table has no discovery time (see the header of the queries file). A "pending event with 10 attempts" is a pending one: the PUBLISHED
+# rows keep the attempts they took and would keep the alert on forever.
+groups:
+  - name: worker-outbox-relay
+    rules:
+      - alert: WorkerOutboxRelayOldestPendingAbove5m
+        expr: max by (source) (worker_outbox_relay_pending_overdue_seconds) > 300
+        for: 1m
+        labels:
+          severity: ticket
+          component: csp-worker
+        annotations:
+          summary: the relay of {{ $labels.source }} has a pending event that is more than 5 minutes past its next attempt
+          runbook_url: https://github.com/code-corhuila/csp-worker#starting-the-relays-and-replaying-events-that-failed-for-good
+
+      - alert: WorkerOutboxRelayEventFailed
+        expr: sum by (source) (worker_outbox_relay_events{status=~"FAILED_PERMANENT|FAILED_EXHAUSTED"}) > 0
+        for: 1m
+        labels:
+          severity: ticket
+          component: csp-worker
+        annotations:
+          summary: the relay of {{ $labels.source }} has events that failed for good and wait for an operator
+          runbook_url: https://github.com/code-corhuila/csp-worker#starting-the-relays-and-replaying-events-that-failed-for-good
+
+      - alert: WorkerOutboxRelayPendingEventRetrying
+        expr: max by (source) (worker_outbox_relay_pending_max_attempts) >= 10
+        for: 1m
+        labels:
+          severity: ticket
+          component: csp-worker
+        annotations:
+          summary: the relay of {{ $labels.source }} has a pending event with 10 attempts or more
+          runbook_url: https://github.com/code-corhuila/csp-worker#starting-the-relays-and-replaying-events-that-failed-for-good
+
+      - alert: WorkerOutboxMetricsDown
+        expr: up{job="csp-worker-outbox"} == 0
+        for: 5m
+        labels:
+          severity: ticket
+          component: csp-worker
+        annotations:
+          summary: the exporter of the outbox relay metrics does not answer, so the alerts of the relay are blind
+          runbook_url: https://github.com/code-corhuila/csp-infra-postgres#the-outbox-relay-metrics-and-alerts-of-csp-worker
