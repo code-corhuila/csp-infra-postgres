@@ -30,7 +30,7 @@ sibling fails loudly on `up`: nothing is silently skipped.
 
 `compose.yml` runs the single PostgreSQL instance of the environment (Annex J) and includes `csp-booking-db`,
 `csp-booking-api` and `csp-worker`. The migration executor of a `-db` repository is a tooling service: it does
-not start with `up`, but `./scripts/up.sh` runs every executor (booking, auth, ticketing, worker, workflow and catalog) after the
+not start with `up`, but `./scripts/up.sh` runs every executor (booking, auth, ticketing, concessions, worker, workflow and catalog) after the
 database is healthy and before the services start, so an environment brought up from scratch or after a pull that adds a migration
 is migrated. The migrations are idempotent; you can still run one executor by hand, as the commands below do.
 
@@ -299,6 +299,20 @@ docker compose --env-file env/dev.env --profile tooling run --rm ticketing-db-mi
 ```
 
 **An environment that already exists** keeps its PostgreSQL volume, so the init script does not run again: add the new block to the env file, then run `docker compose --env-file env/<environment>.env exec postgres sh /docker-entrypoint-initdb.d/01-instance.sh` once (every statement is idempotent) before the migration.
+
+## The concessions service
+
+`csp-concessions-api` keeps products, combos, stock and orders in schema `concessions` of this PostgreSQL instance. The repositories `csp-concessions-db` and `csp-concessions-api` must be cloned as siblings of this one. The platform gives them two things.
+
+- **The database.** `postgres/init/01-instance.sh` creates the login `concessions_app` (password `CONCESSIONS_APP_PASSWORD`, `search_path` `concessions`) and the migration executor `concessions_migrator` (password `CONCESSIONS_MIGRATOR_PASSWORD`), owner of the schema, with `CREATEROLE` and `CREATE` on the database. The roles `concessions_reader`, `concessions_writer` and `concessions_outbox_reader` and the grants to `concessions_app` and `worker_app` come from the migrations of `csp-concessions-db`.
+- **The variables.** They are named `CONCESSIONS_*` because `SPRING_DATASOURCE_*` belong to Booking in the file they share: `CONCESSIONS_DB_USER` and `CONCESSIONS_DB_PASSWORD` (the executor) and `CONCESSIONS_APP_USER` and `CONCESSIONS_APP_PASSWORD` (the service). `WORKFLOW_SUBJECTS=csp-workflow` and `SERVICE_SUBJECTS` are the ones of the Booking block and also reach Concessions, so the workflow service can call `/internal/workflow/` (ADR-069). The gateway already routes `/api/v1/concessions/` to `concessions-api:8085`.
+
+```bash
+./scripts/up.sh dev
+docker compose --env-file env/dev.env --profile tooling run --rm concessions-db-migrate
+```
+
+**An environment that already exists** keeps its PostgreSQL volume, so the init script does not run again: add the new block to the env file, then run `docker compose --env-file env/<environment>.env exec postgres sh /docker-entrypoint-initdb.d/01-instance.sh` once (every statement is idempotent) before the migration. The outbox relay of Concessions in `csp-worker` stays off until its flag is set.
 
 ## The object storage and the mail catcher
 
