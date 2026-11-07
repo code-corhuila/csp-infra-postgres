@@ -23,7 +23,7 @@ scripts/dev-token.sh           DEVELOPMENT ONLY: prints a signed token for a sub
 
 ## Repositories are cloned as siblings
 
-The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-catalog-api`, `csp-infra-redis`, `csp-infra-rabbitmq`, `csp-api-gateway`). A missing
+The `include` paths of `compose.yml` assume that every repository is cloned next to this one, in a folder named as the repository (`csp-booking-db`, `csp-booking-api`, `csp-auth-db`, `csp-auth-api`, `csp-worker`, `csp-infra-mongo`, `csp-catalog-db`, `csp-catalog-api`, `csp-infra-redis`, `csp-infra-rabbitmq`, `csp-infra-rustfs`, `csp-api-gateway`). A missing
 sibling fails loudly on `up`: nothing is silently skipped.
 
 ## The booking slice
@@ -289,7 +289,7 @@ of `csp-worker`.
 
 - **The database.** `postgres/init/01-instance.sh` creates the login `ticketing_app` (password `TICKETING_APP_PASSWORD`, `search_path` `ticketing_fulfillment`) and the migration executor `ticketing_migrator` (password `TICKETING_MIGRATOR_PASSWORD`), owner of the schema, with `CREATEROLE` and `CREATE` on the database. The schema is `ticketing_fulfillment` but the roles are `ticketing_*` (`ticketing_reader`, `ticketing_writer`, `ticketing_outbox_reader`), so `migrator()` takes the prefix as an optional third argument. The tooling service `ticketing-db-migrate` of `csp-ticketing-db` applies the migrations.
 - **The variables.** Every one is named `TICKETING_*` or `OBJECT_STORAGE_*`, because `SPRING_DATASOURCE_*` and `RABBITMQ_*` belong to other services in the file they share: `TICKETING_DB_USER` and `TICKETING_DB_PASSWORD` (the executor), `TICKETING_APP_USER` and `TICKETING_APP_PASSWORD` (the service), `TICKETING_FULFILLMENT_PASSWORD` (its broker login, already in the broker block), `OBJECT_STORAGE_ACCESS_KEY` and `OBJECT_STORAGE_SECRET_KEY` (the read-only account of the bucket of the PDFs; the service refuses to start without them) and `TICKETING_SMTP_*`. The service builds its AMQP connection from the login and the password, so `TICKETING_AMQP_URL` is not needed here.
-- **No object storage yet.** The platform does not compose an object storage, so the bucket `tickets` does not exist: the service starts and reports `objectStorage` down on `/health/ready`, and the download of a PDF answers `503`. The email provider is down too until a catcher runs (`docker compose --profile mail up mailpit` of `csp-auth-api`, or a real relay).
+- **Object storage and mail catcher.** The bucket `tickets` comes from `csp-infra-rustfs` and the catcher from the profile `mail` of `csp-auth-api` (sections below), so in development `/health/ready` answers `200` once both are up and the service was created with the keys of the storage.
 
 ```bash
 ./scripts/up.sh dev
@@ -297,6 +297,14 @@ docker compose --env-file env/dev.env --profile tooling run --rm ticketing-db-mi
 ```
 
 **An environment that already exists** keeps its PostgreSQL volume, so the init script does not run again: add the new block to the env file, then run `docker compose --env-file env/<environment>.env exec postgres sh /docker-entrypoint-initdb.d/01-instance.sh` once (every statement is idempotent) before the migration.
+
+## The object storage and the mail catcher
+
+**Storage.** The single RustFS instance of the environment (ADR-058) is defined in `csp-infra-rustfs`, which must be cloned as a sibling of this repository (a clone of the former `csp-infra-minio` is not it: the repository was renamed). This repository includes it, so `up.sh` starts it on the `platform` network (`rustfs:9000`, never published to the host; the console is only published by the dev file of its own repository) and then runs its one-shot setup job (`docker compose run --rm -T setup < ../csp-infra-rustfs/rustfs/setup.sh`), which creates the private bucket `tickets` (versioning, 30-day expiry of old versions, hard quota) and two accounts: `ticketing_pdf_reader` (read on `tickets/*`, the `OBJECT_STORAGE_*` account of `csp-ticketing-api`) and `ticketing_pdf_writer` (write and read on `tickets/*`, for the PDF job of `csp-worker`). The setup is idempotent and `up.sh` refuses to start while `RUSTFS_ROOT_USER`, `RUSTFS_ROOT_PASSWORD`, `TICKETING_PDF_WRITER_SECRET` or `TICKETING_PDF_READER_SECRET` is empty (`openssl rand -hex 24`). `OBJECT_STORAGE_SECRET_KEY` is `${TICKETING_PDF_READER_SECRET}`, so the storage block must come before the Ticketing block in the env file (Compose only expands variables defined earlier). `csp-worker` reads the writer account from variables with the same `OBJECT_STORAGE_*` names, which are the reader's here; its `deploy/compose.yml` does not pass them yet and its PDF job is off by default, so wiring it needs domain variable names (a follow-up, with the job).
+
+**Mail catcher.** Mailpit is the profile `mail` of `csp-auth-api` and is reused, not duplicated: `env/dev.env.example` sets `COMPOSE_PROFILES=mail`, so `up` starts it (SMTP `mailpit:1025` on the platform network; messages at `http://localhost:8025`, loopback only). The service forces SMTP authentication and STARTTLS unless told otherwise, which the catcher does not offer, so development sets `TICKETING_SMTP_AUTH=false` and `TICKETING_SMTP_STARTTLS=false` (qa and main keep `true` with their provider). Requires the compose of `csp-ticketing-api` that reads them (code-corhuila/csp-ticketing-api#71).
+
+**An environment that already exists** copies the new variables from `env/<environment>.env.example` (the block "The single object storage" and the two `TICKETING_SMTP_*` flags), and recreates `ticketing-api` once so that it reads the reader account: `docker compose --env-file env/dev.env up -d ticketing-api`.
 
 ## The API gateway
 
