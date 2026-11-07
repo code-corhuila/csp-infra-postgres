@@ -42,7 +42,7 @@ docker network inspect platform >/dev/null 2>&1 || docker network create platfor
 # issue #63). So: PostgreSQL first (healthy = the real server, see compose.yml), then the executors, MongoDB and the
 # executor of Catalog, then everything else. Every migration is idempotent: with nothing pending it answers "No migration necessary".
 docker compose --env-file "$env_file" up -d --wait postgres
-for executor in booking-db-migrate auth-db-migrate ticketing-db-migrate worker-db-migrate workflow-db-migrate; do
+for executor in booking-db-migrate auth-db-migrate ticketing-db-migrate concessions-db-migrate worker-db-migrate workflow-db-migrate; do
   docker compose --env-file "$env_file" --profile tooling run --rm -e FLYWAY_CONNECT_RETRIES=10 "$executor"
 done
 docker compose --env-file "$env_file" up -d --wait mongodb

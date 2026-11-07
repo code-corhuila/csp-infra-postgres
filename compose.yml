@@ -11,6 +11,8 @@ include:
   - path: ../csp-workflow/deploy/compose.yml
   - path: ../csp-ticketing-db/deploy/compose.yml
   - path: ../csp-ticketing-api/deploy/compose.yml
+  - path: ../csp-concessions-db/deploy/compose.yml
+  - path: ../csp-concessions-api/deploy/compose.yml
   - path: ../csp-infra-mongo/compose.yml
   - path: ../csp-catalog-db/deploy/compose.yml
   - path: ../csp-catalog-api/deploy/compose.yml
@@ -38,6 +40,8 @@ services:
       WORKFLOW_MIGRATOR_PASSWORD: ${WORKFLOW_MIGRATOR_PASSWORD:?set WORKFLOW_MIGRATOR_PASSWORD}
       TICKETING_APP_PASSWORD: ${TICKETING_APP_PASSWORD:?set TICKETING_APP_PASSWORD}
       TICKETING_MIGRATOR_PASSWORD: ${TICKETING_MIGRATOR_PASSWORD:?set TICKETING_MIGRATOR_PASSWORD}
+      CONCESSIONS_APP_PASSWORD: ${CONCESSIONS_APP_PASSWORD:?set CONCESSIONS_APP_PASSWORD}
+      CONCESSIONS_MIGRATOR_PASSWORD: ${CONCESSIONS_MIGRATOR_PASSWORD:?set CONCESSIONS_MIGRATOR_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro

@@ -3,7 +3,7 @@
 # volume is empty, and it can be run again by hand when a domain is added: every statement is idempotent.
 # The roles of each domain (booking_reader, booking_writer, auth_reader...) and its schema are created by its
 # -db repository; here only the login users exist, with the passwords of the environment, and their search_path.
-# The exception is <domain>_migrator (booking_migrator, auth_migrator and workflow_migrator so far): the login of the migration executor
+# The exception is <domain>_migrator (booking_migrator, auth_migrator, workflow_migrator and concessions_migrator so far): the login of the migration executor
 # of the -db repository, owner of the schema of its domain, so that no executor connects as the instance administrator
 # after this script. It has CREATEROLE because the migrations create the roles of the domain (V002 of csp-booking-db,
 # V012 of csp-auth-db, V003 of csp-workflow); on PostgreSQL 16 that only lets it manage the roles it creates itself. It also has CREATE on the
@@ -42,7 +42,8 @@ SQL
 
 psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
   -v booking_password="$BOOKING_APP_PASSWORD" -v auth_password="$AUTH_APP_PASSWORD" \
-  -v worker_password="$WORKER_APP_PASSWORD" -v workflow_password="$WORKFLOW_APP_PASSWORD" -v ticketing_password="$TICKETING_APP_PASSWORD" <<'SQL'
+  -v worker_password="$WORKER_APP_PASSWORD" -v workflow_password="$WORKFLOW_APP_PASSWORD" -v ticketing_password="$TICKETING_APP_PASSWORD" \
+  -v concessions_password="$CONCESSIONS_APP_PASSWORD" <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'booking_app', :'booking_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'booking_app')\gexec
@@ -54,13 +55,17 @@ SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'workflow_app', :'workflow_pas
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'workflow_app')\gexec
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'ticketing_app', :'ticketing_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ticketing_app')\gexec
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', 'concessions_app', :'concessions_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'concessions_app')\gexec
 ALTER ROLE booking_app SET search_path = booking;
 ALTER ROLE auth_app SET search_path = auth;
 ALTER ROLE workflow_app SET search_path = workflow;
 ALTER ROLE ticketing_app SET search_path = ticketing_fulfillment;
+ALTER ROLE concessions_app SET search_path = concessions;
 SQL
 
 migrator booking "$BOOKING_MIGRATOR_PASSWORD"
 migrator auth "$AUTH_MIGRATOR_PASSWORD"
 migrator workflow "$WORKFLOW_MIGRATOR_PASSWORD"
 migrator ticketing_fulfillment "$TICKETING_MIGRATOR_PASSWORD" ticketing
+migrator concessions "$CONCESSIONS_MIGRATOR_PASSWORD"
