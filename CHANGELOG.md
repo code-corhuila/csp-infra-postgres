@@ -12,6 +12,7 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ### Added
 
+- The three env examples list the `csp-worker` variables of Concessions that the platform passes and the examples lacked (HU-CONCESSIONS-004): `CONCESSIONS_OUTBOX_RELAY_ENABLED` and `CONCESSIONS_EVENTS_ENABLED`, both `false`, and `CONCESSIONS_AMQP_URL`, built from `CONCESSIONS_PASSWORD`. Found by running the platform end to end.
 - The platform composes Concessions (HU-CONCESSIONS-004, ADR-069): `compose.yml` includes `../csp-concessions-db/deploy/compose.yml` and `../csp-concessions-api/deploy/compose.yml` and gives the PostgreSQL container `CONCESSIONS_APP_PASSWORD` and `CONCESSIONS_MIGRATOR_PASSWORD`; `postgres/init/01-instance.sh` creates the login `concessions_app` (`search_path` `concessions`) and the migration executor `concessions_migrator`, and `scripts/up.sh` runs `concessions-db-migrate`. The three `env/*.env.example` files list `CONCESSIONS_APP_PASSWORD`, `CONCESSIONS_MIGRATOR_PASSWORD`, `CONCESSIONS_DB_USER`, `CONCESSIONS_DB_PASSWORD` and `CONCESSIONS_APP_USER`; `WORKFLOW_SUBJECTS=csp-workflow` was already there. The README has a section for the service. Requires the compose files of `csp-concessions-db` and `csp-concessions-api` that read those names.
 
 - The development environment example enables the Auth outbox relay now that the platform composition includes Ticketing and its Auth-event queues (code-corhuila/csp-auth-api#108).
