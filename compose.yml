@@ -37,7 +37,9 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_ADMIN_USER} -d ${PG_DATABASE}"]
+      # -h makes it a TCP check: the temporary server of the first start (init scripts) listens on the socket only, so without it
+      # the container would be healthy before the logins exist and the migrators could not connect.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${PG_ADMIN_USER} -d ${PG_DATABASE}"]
       interval: 5s
       timeout: 5s
       retries: 10
