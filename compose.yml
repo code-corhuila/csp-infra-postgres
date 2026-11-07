@@ -9,11 +9,14 @@ include:
   - path: ../csp-auth-api/deploy/compose.yml
   - path: ../csp-worker/deploy/compose.yml
   - path: ../csp-workflow/deploy/compose.yml
+  - path: ../csp-ticketing-db/deploy/compose.yml
+  - path: ../csp-ticketing-api/deploy/compose.yml
   - path: ../csp-infra-mongo/compose.yml
   - path: ../csp-catalog-db/deploy/compose.yml
   - path: ../csp-catalog-api/deploy/compose.yml
   - path: ../csp-infra-redis/compose.yml
   - path: ../csp-infra-rabbitmq/compose.yml
+  - path: ../csp-infra-rustfs/compose.yml
   - path: ../csp-api-gateway/deploy/compose.yml
   # one line per repository the team runs
 
@@ -33,6 +36,8 @@ services:
       WORKER_APP_PASSWORD: ${WORKER_APP_PASSWORD:?set WORKER_APP_PASSWORD}
       WORKFLOW_APP_PASSWORD: ${WORKFLOW_APP_PASSWORD:?set WORKFLOW_APP_PASSWORD}
       WORKFLOW_MIGRATOR_PASSWORD: ${WORKFLOW_MIGRATOR_PASSWORD:?set WORKFLOW_MIGRATOR_PASSWORD}
+      TICKETING_APP_PASSWORD: ${TICKETING_APP_PASSWORD:?set TICKETING_APP_PASSWORD}
+      TICKETING_MIGRATOR_PASSWORD: ${TICKETING_MIGRATOR_PASSWORD:?set TICKETING_MIGRATOR_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
