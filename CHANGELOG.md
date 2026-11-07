@@ -5,6 +5,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ## [Unreleased]
 
+### Fixed
+
+- `csp-workflow` no longer stops when it starts before its migration (code-corhuila/csp-infra-postgres#59): `workflow-db-migrate` is in the `tooling` profile, so `./scripts/up.sh` (`up -d --build` only) never ran it and the service started without `workflow.saga`. `up.sh` now runs `up -d --wait postgres`, then the migration with `FLYWAY_CONNECT_RETRIES=10`, then the full `up`. The healthcheck of `postgres` in `compose.yml` is now a TCP check (`pg_isready -h 127.0.0.1`), because on an empty volume the temporary init server listens on the socket only and the container could be healthy before the logins exist. `scripts/test-start-order.sh` checks the order and prints totals; the README says so. No change in `csp-workflow`.
+
 ### Added
 
 - The platform composes Ticketing (code-corhuila/csp-infra-postgres#41): `compose.yml` includes `../csp-ticketing-db/deploy/compose.yml` and `../csp-ticketing-api/deploy/compose.yml` and gives the PostgreSQL container `TICKETING_APP_PASSWORD` and `TICKETING_MIGRATOR_PASSWORD`; `postgres/init/01-instance.sh` creates the login `ticketing_app` (`search_path` `ticketing_fulfillment`) and the executor `ticketing_migrator`, for which `migrator()` now takes an optional prefix because the schema `ticketing_fulfillment` and the roles `ticketing_*` differ; the three `env/*.env.example` files list the Ticketing variables (names and placeholders only) and the README has a section. Requires the compose of `csp-ticketing-api` that reads domain variables and V010 of `csp-ticketing-db` (it grants `ticketing_writer` to `ticketing_app`; without it every request that touches the database fails with `permission denied for schema ticketing_fulfillment`). An environment created before this change has to copy the new block into its env file and run the init script once.
