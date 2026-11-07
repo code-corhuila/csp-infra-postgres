@@ -7,6 +7,10 @@ All notable changes of `csp-infra-postgres` are recorded here. The format follow
 
 ## [3.0.0] - 2026-10-15
 
+### Fixed
+
+- `csp-workflow` no longer stops when it starts before its migration (code-corhuila/csp-infra-postgres#59): `workflow-db-migrate` is in the `tooling` profile, so `./scripts/up.sh` (`up -d --build` only) never ran it and the service started without `workflow.saga`. `up.sh` now runs `up -d --wait postgres`, then the migration with `FLYWAY_CONNECT_RETRIES=10`, then the full `up`. The healthcheck of `postgres` in `compose.yml` is now a TCP check (`pg_isready -h 127.0.0.1`), because on an empty volume the temporary init server listens on the socket only and the container could be healthy before the logins exist. `scripts/test-start-order.sh` checks the order and prints totals; the README says so. No change in `csp-workflow`.
+
 ### Added
 
 - TLS to the catalog API (code-corhuila/csp-docs#289 criterion 2, ADR-067): `scripts/internal-ca.sh dev|qa|main` creates the internal CA of the environment (`csp-internal-ca`, RSA 3072, 1 year) and the certificate of Catalog (90 days, names `catalog-api` and `localhost`, chain PEM) in the git-ignored `keys/tls/<environment>/`, keeps the CA key out of every container, and writes `CATALOG_TLS_CERTIFICATE_HOST_FILE`, `CATALOG_TLS_PRIVATE_KEY_HOST_FILE` and `CATALOG_TLS_CA_HOST_FILE` into the env file. The three `env/*.env.example` files state `CATALOG_BASE_URL=https://catalog-api:8082/api/v1/catalog`, `APP_GATEWAY_CATALOG_UPSTREAM=https://catalog-api:8082`, the three container paths (`/run/tls/...`) and the host files; `dev-keys.sh` runs the script for dev and `up.sh` refuses to start without the three files. `scripts/test-internal-ca.sh` checks all of it (SAN, chain, validity, cross-environment rejection, env examples) and prints totals. The README says what each service repository mounts and how to renew every 90 days. Requires the matching changes of `csp-catalog-api`, `csp-api-gateway` and `csp-booking-api`; an environment created before this change copies the new block into its env file.
