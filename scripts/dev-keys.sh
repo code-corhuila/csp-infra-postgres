@@ -1,0 +1,34 @@
+#!/usr/bin/env sh
+# DEVELOPMENT ONLY. Generates an RS256 key pair in keys/ (git-ignored) and writes
+# into env/dev.env the public key every service validates with, plus a service token
+# for csp-worker (its sub must be csp-worker: csp-booking-api only lets that subject call its maintenance operations), a service token
+# for csp-workflow (WORKFLOW_SERVICE_TOKEN, sub csp-workflow: the subject WORKFLOW_SUBJECTS lets call /internal/workflow/ of csp-booking-api), and the
+# credential of csp-booking-api for Catalog (keys/booking-service.token, sub booking-service) with the absolute path of that file.
+# The same pair signs (the private key, APP_AUTH_JWT_PRIVATE_KEY of csp-auth-api) and validates (the public key, the
+# other services). qa and main use the identity service's keys, injected as secrets — never these.
+set -eu
+cd "$(dirname "$0")/.."
+mkdir -p keys
+[ -f keys/jwt-private.pem ] || openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out keys/jwt-private.pem 2>/dev/null
+openssl pkey -in keys/jwt-private.pem -pubout -out keys/jwt-public.pem
+
+# One line with literal \n escapes: that is how an env file holds a PEM.
+public_key=$(awk '{ printf "%s\\n", $0 }' keys/jwt-public.pem)
+private_key=$(awk '{ printf "%s\\n", $0 }' keys/jwt-private.pem)
+service_token=$(./scripts/dev-token.sh csp-worker 1440)
+workflow_token=$(./scripts/dev-token.sh csp-workflow 1440)
+./scripts/dev-token.sh booking-service 1440 > keys/booking-service.token
+# The path compose mounts: absolute, and in the form Docker Desktop reads on Windows (pwd -W under Git Bash).
+catalog_token_file="$(cd keys && { pwd -W 2>/dev/null || pwd; })/booking-service.token"
+
+env_file=env/dev.env
+[ -f "$env_file" ] || cp env/dev.env.example "$env_file"
+grep -v -e '^JWT_PUBLIC_KEY=' -e '^SERVICE_TOKEN=' -e '^WORKFLOW_SERVICE_TOKEN=' -e '^APP_AUTH_JWT_PRIVATE_KEY=' -e '^CATALOG_SERVICE_TOKEN_HOST_FILE=' "$env_file" > "$env_file.tmp" || true
+printf 'JWT_PUBLIC_KEY="%s"\n' "$public_key" >> "$env_file.tmp"
+printf 'SERVICE_TOKEN=%s\n' "$service_token" >> "$env_file.tmp"
+printf 'WORKFLOW_SERVICE_TOKEN=%s\n' "$workflow_token" >> "$env_file.tmp"
+printf 'APP_AUTH_JWT_PRIVATE_KEY="%s"\n' "$private_key" >> "$env_file.tmp"
+printf 'CATALOG_SERVICE_TOKEN_HOST_FILE=%s\n' "$catalog_token_file" >> "$env_file.tmp"
+mv "$env_file.tmp" "$env_file"
+./scripts/internal-ca.sh dev
+echo "keys/ and $env_file updated. A user token: ./scripts/dev-token.sh <subject> [minutes]"

@@ -1,0 +1,91 @@
+# Unit tests of auth-latency.yml. Run with: promtool test rules observability/alerts/auth-latency.test.yml
+# Series are synthetic: one sample per minute, 40 minutes.
+rule_files:
+  - auth-latency.yml
+
+evaluation_interval: 1m
+
+tests:
+  # (a) every answer takes between 1 and 2.5 seconds (p95 above the SLO), 10 requests per minute for more than 15 minutes
+  - interval: 1m
+    input_series:
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="0.05"}'
+        values: '0+0x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="0.1"}'
+        values: '0+0x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="0.25"}'
+        values: '0+0x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="0.5"}'
+        values: '0+0x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="1"}'
+        values: '0+0x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="2.5"}'
+        values: '0+10x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="+Inf"}'
+        values: '0+10x40'
+      - series: 'auth_http_requests_total{route="/api/v1/auth/login",method="POST",outcome="success"}'
+        values: '0+10x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AuthCredentialsLatencyP95AboveSlo
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: AuthCredentialsLatencyP95AboveSlo
+        exp_alerts:
+          - exp_labels:
+              route: /api/v1/auth/login
+              severity: ticket
+              team: auth
+            exp_annotations:
+              summary: p95 of POST login or register is above the SLO of 1 second for 15 minutes
+              runbook_url: https://github.com/code-corhuila/csp-docs/blob/main/09-microservices/services/02-auth-service/runbook.md
+
+  # (b) the same latency with fewer than 10 requests in 15 minutes (0.5 per minute): the guard keeps it silent
+  - interval: 1m
+    input_series:
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="1"}'
+        values: '0+0x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="2.5"}'
+        values: '0+0.5x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/login",method="POST",le="+Inf"}'
+        values: '0+0.5x40'
+      - series: 'auth_http_requests_total{route="/api/v1/auth/login",method="POST",outcome="success"}'
+        values: '0+0.5x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AuthCredentialsLatencyP95AboveSlo
+        exp_alerts: []
+
+  # (c) every answer takes 50 milliseconds or less (p95 under the SLO), plenty of traffic
+  - interval: 1m
+    input_series:
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/register",method="POST",le="0.05"}'
+        values: '0+10x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/register",method="POST",le="1"}'
+        values: '0+10x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/register",method="POST",le="2.5"}'
+        values: '0+10x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/register",method="POST",le="+Inf"}'
+        values: '0+10x40'
+      - series: 'auth_http_requests_total{route="/api/v1/auth/register",method="POST",outcome="success"}'
+        values: '0+10x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AuthCredentialsLatencyP95AboveSlo
+        exp_alerts: []
+
+  # (d) a route that is neither login nor register answers slowly with plenty of traffic: not covered by the alert
+  - interval: 1m
+    input_series:
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/jwks",method="GET",le="1"}'
+        values: '0+0x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/jwks",method="GET",le="2.5"}'
+        values: '0+10x40'
+      - series: 'auth_http_request_duration_seconds_bucket{route="/api/v1/auth/jwks",method="GET",le="+Inf"}'
+        values: '0+10x40'
+      - series: 'auth_http_requests_total{route="/api/v1/auth/jwks",method="GET",outcome="success"}'
+        values: '0+10x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AuthCredentialsLatencyP95AboveSlo
+        exp_alerts: []

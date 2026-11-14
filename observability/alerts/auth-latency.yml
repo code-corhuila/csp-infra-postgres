@@ -1,0 +1,24 @@
+# Latency of the credential endpoints of csp-auth-api (code-corhuila/csp-docs#281, STRIDE D, criterion 4). ADR-061 in csp-docs decides it.
+#
+# SLO: 95 % of the requests of POST login and POST register answer in 1 second or less, over a rolling 30 days
+# (the SLO of the week 11 workshop CP6, extended to login).
+#
+# Traffic of the platform is low: with a few requests in a quarter of an hour a single slow answer moves the p95
+# above the SLO, so the alert would page about noise. The second operand is the guard: it only lets a route through
+# when it served at least 10 requests in the last 15 minutes. Both operands are aggregated by `route`, so
+# `and on (route)` keeps the route in the alert.
+groups:
+  - name: auth-credentials-latency
+    rules:
+      - alert: AuthCredentialsLatencyP95AboveSlo
+        expr: |
+          histogram_quantile(0.95, sum by (le, route) (rate(auth_http_request_duration_seconds_bucket{route=~"/api/v1/auth/(login|register)"}[5m]))) > 1
+          and on (route)
+          sum by (route) (increase(auth_http_requests_total{route=~"/api/v1/auth/(login|register)"}[15m])) >= 10
+        for: 15m
+        labels:
+          severity: ticket
+          team: auth
+        annotations:
+          summary: p95 of POST login or register is above the SLO of 1 second for 15 minutes
+          runbook_url: https://github.com/code-corhuila/csp-docs/blob/main/09-microservices/services/02-auth-service/runbook.md
